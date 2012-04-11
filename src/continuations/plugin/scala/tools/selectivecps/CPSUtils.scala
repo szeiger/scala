@@ -25,6 +25,7 @@ trait CPSUtils {
 
   lazy val ModCPS = definitions.getModule("scala.util.continuations")
   lazy val MethShiftUnit = definitions.getMember(ModCPS, "shiftUnit")
+  lazy val MethShiftUnit0 = definitions.getMember(ModCPS, "shiftUnit0")
   lazy val MethShiftUnitR = definitions.getMember(ModCPS, "shiftUnitR")
   lazy val MethShift = definitions.getMember(ModCPS, "shift")
   lazy val MethShiftR = definitions.getMember(ModCPS, "shiftR")
