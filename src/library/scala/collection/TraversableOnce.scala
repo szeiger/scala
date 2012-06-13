@@ -259,6 +259,18 @@ trait TraversableOnce[+A] extends Any with GenTraversableOnce[A] {
     b.result
   }
 
+  /** Converts this $coll to a specified collection type.
+   *  $willNotTerminateInf
+   *  @tparam C    the type constructor of the returned collection.
+   *  @return      a collection of the specified type containing all elements of this $coll.
+   */
+  def to[C[_]](implicit bf: generic.CanBuildFrom[Nothing, A @uV, C[A @uV]]): C[A @uV] = {
+    val b = bf()
+    for (x <- self)
+      b += x
+    b.result
+  }
+
   def mkString(start: String, sep: String, end: String): String =
     addString(new StringBuilder(), start, sep, end).toString
 
