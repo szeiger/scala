@@ -193,16 +193,67 @@ lazy val interactive = configureAsSubproject(project)
   .settings(disableDocsAndPublishingTasks: _*)
   .dependsOn(compiler)
 
-// TODO: SI-9339 embed shaded copy of jline & its interface (see #4563)
-lazy val repl = configureAsSubproject(project)
+lazy val replBase = Project("repl-base", file(".") / "src" / "repl")
+  .settings(scalaSubprojectSettings: _*)
+  .settings(disableDocsAndPublishingTasks: _*)
+  .settings(
+    baseDirectory := (baseDirectory in ThisBuild).value / "src" / "repl"
+  )
+  .dependsOn(compiler, interactive)
+
+lazy val replJline = configureAsSubproject(Project("repl-jline", file(".") / "src" / "repl-jline"))
   .settings(
     libraryDependencies += jlineDep,
-    connectInput in run := true,
-    outputStrategy in run := Some(StdoutOutput),
-    run <<= (run in Compile).partialInput(" -usejavacp") // Automatically add this so that `repl/run` works without additional arguments.
+    fullClasspath in assembly := {
+      val keep = Set(
+        (dependencyClasspath in Compile).value.find(_.get(moduleID.key) == Some(jlineDep)).get.data,
+        (classDirectory in Compile in replBase).value,
+        (classDirectory in Compile).value
+      )
+      (fullClasspath in assembly).value.filter(a => keep.contains(a.data))
+    },
+    assemblyShadeRules in assembly := Seq(
+      ShadeRule.rename("org.fusesource.**" -> "scala.tools.fusesource_embedded.@1").inAll,
+      ShadeRule.rename("jline.**" -> "scala.tools.jline_embedded.@1").inAll,
+      ShadeRule.rename("scala.tools.nsc.interpreter.jline.**" -> "scala.tools.nsc.interpreter.jline_embedded.@1").inAll,
+      ShadeRule.keep("scala.tools.**").inAll
+    ),
+    //logLevel in assembly := Level.Debug,
+    assemblyMergeStrategy in assembly := {
+      //case PathList("javax", "servlet", xs @ _*)         => MergeStrategy.first
+      //case PathList(ps @ _*) if ps.last endsWith ".html" => MergeStrategy.first
+      //case "application.conf"                            => MergeStrategy.concat
+      //case "unwanted.txt"                                => MergeStrategy.discard
+      case x =>
+        println("-- "+x)
+        MergeStrategy.first
+        //val oldStrategy = (assemblyMergeStrategy in assembly).value
+        //oldStrategy(x)
+    }
   )
   .settings(disableDocsAndPublishingTasks: _*)
-  .dependsOn(compiler, interactive)
+  .dependsOn(replBase)
+
+// TODO: SI-9339 embed shaded copy of jline & its interface (see #4563)
+lazy val repl = Project("repl", file(".") / "target" / "repl-src-dummy")
+  .settings(scalaSubprojectSettings: _*)
+  .settings(disableDocsAndPublishingTasks: _*)
+  .settings(
+    connectInput in run := true,
+    outputStrategy in run := Some(StdoutOutput),
+    run <<= (run in Compile).partialInput(" -usejavacp"), // Automatically add this so that `repl/run` works without additional arguments.
+    //unmanagedResources in Compile ++= (products in Compile in replBase).value
+    //unmanagedResourceDirectories in Compile := Seq((classDirectory in Compile in replBase).value),
+    //includeFilter in unmanagedResources in Compile := "*",
+    //copyResources in Compile <<= (copyResources in Compile) dependsOn (products in Compile in replBase)
+    compile in Compile <<= (compile in Compile).dependsOn(Def.task {
+      val jar = (assembly in replJline).value
+      val to = (classDirectory in Compile).value
+      println(s"Unzipping $jar to $to")
+      IO.unzip(jar, to)
+    })
+  )
+  .dependsOn(replJline)
 
 lazy val scaladoc = configureAsSubproject(project)
   .settings(
@@ -291,7 +342,7 @@ lazy val test = project.
   )
 
 lazy val root = (project in file(".")).
-  aggregate(library, forkjoin, reflect, compiler, interactive, repl,
+  aggregate(library, forkjoin, reflect, compiler, interactive, replBase, replJline, repl,
     scaladoc, scalap, actors, partestExtras, junit).settings(
     sources in Compile := Seq.empty,
     onLoadMessage := """|*** Welcome to the sbt build definition for Scala! ***
