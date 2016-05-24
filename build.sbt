@@ -168,7 +168,7 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
   ),
   homepage := Some(url("http://www.scala-lang.org")),
   startYear := Some(2002),
-  licenses += ("BSD 3-Clause", url("http://www.scala-lang.org/license.html")),
+  licenses += (("BSD 3-Clause", url("http://www.scala-lang.org/license.html"))),
   apiURL := Some(url("http://www.scala-lang.org/api/" + versionProperties.value.mavenVersion + "/")),
   pomIncludeRepository := { _ => false },
   pomExtra := {
@@ -362,6 +362,7 @@ lazy val library = configureAsSubproject(project)
   .settings(filterDocSources("*.scala" -- (regexFileFilter(".*/runtime/.*\\$\\.scala") ||
                                            regexFileFilter(".*/runtime/ScalaRunTime\\.scala") ||
                                            regexFileFilter(".*/runtime/StringAdd\\.scala"))): _*)
+  .settings(MiMa.settings: _*)
   .dependsOn(forkjoin)
 
 lazy val reflect = configureAsSubproject(project)
@@ -384,6 +385,7 @@ lazy val reflect = configureAsSubproject(project)
       "/project/packaging" -> <packaging>jar</packaging>
     )
   )
+  .settings(MiMa.settings: _*)
   .dependsOn(library)
 
 lazy val compiler = configureAsSubproject(project)
@@ -616,7 +618,7 @@ lazy val test = project
     fork in IntegrationTest := true,
     javaOptions in IntegrationTest += "-Xmx1G",
     testFrameworks += new TestFramework("scala.tools.partest.sbt.Framework"),
-    testOptions in IntegrationTest += Tests.Setup( () => root.base.getAbsolutePath + "/pull-binary-libs.sh" ! ),
+    testOptions in IntegrationTest += Tests.Setup( () => (root.base.getAbsolutePath + "/pull-binary-libs.sh").! ),
     testOptions in IntegrationTest += Tests.Argument("-Dpartest.java_opts=-Xmx1024M -Xms64M -XX:MaxPermSize=128M"),
     definedTests in IntegrationTest += (
       new sbt.TestDefinition(
@@ -746,7 +748,7 @@ lazy val dist = (project in file("dist"))
         case (Some(m), f) if extraModules contains uniqueModule(m) => f
       }
       val jlineJAR = (dependencyClasspath in Compile).value.find(_.get(moduleID.key) == Some(jlineDep)).get.data
-      val mappings = extraJars.map(f => (f, targetDir / f.getName)) :+ (jlineJAR, targetDir / "jline.jar")
+      val mappings = extraJars.map(f => (f, targetDir / f.getName)) :+ ((jlineJAR, targetDir / "jline.jar"))
       IO.copy(mappings, overwrite = true)
       targetDir
     },
