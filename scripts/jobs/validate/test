@@ -20,6 +20,10 @@ case $prDryRun in
 
   *)
 
+    # Download the auxiliary JARs in test/files/lib:
+    # TODO We should find a better way to fetch them once ant is gone
+    ./pull-binary-libs.sh
+
     # build quick using STARR built upstream, as specified by scalaVersion
     # (in that sense it's locker, since it was built with starr by that upstream job);
     # and run JUnit tests
