@@ -146,7 +146,7 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
   target := (baseDirectory in ThisBuild).value / "target" / thisProject.value.id,
   classDirectory in Compile := buildDirectory.value / "quick/classes" / thisProject.value.id,
   target in Compile in doc := buildDirectory.value / "scaladoc" / thisProject.value.id,
-  // given that classDirectory and doc target are overriden to be _outside_ of target directory, we have
+  // given that classDirectory and doc target are overridden to be _outside_ of target directory, we have
   // to make sure they are being cleaned properly
   cleanFiles += (classDirectory in Compile).value,
   cleanFiles += (target in Compile in doc).value,
@@ -245,7 +245,7 @@ def removePomDependencies(deps: (String, String)*): Seq[Setting[_]] = Seq(
     val n2 = pomPostProcess.value.apply(n)
     import scala.xml._
     import scala.xml.transform._
-    (new RuleTransformer(new RewriteRule {
+    new RuleTransformer(new RewriteRule {
       override def transform(node: Node) = node match {
         case e: Elem if e.label == "dependency" &&
             deps.exists { case (g, a) =>
@@ -254,13 +254,13 @@ def removePomDependencies(deps: (String, String)*): Seq[Setting[_]] = Seq(
             } => Seq.empty
         case n => Seq(n)
       }
-    })).transform(Seq(n2)).head
+    }).transform(Seq(n2)).head
   },
   deliverLocal := {
     import scala.xml._
     import scala.xml.transform._
     val f = deliverLocal.value
-    val e = (new RuleTransformer(new RewriteRule {
+    val e = new RuleTransformer(new RewriteRule {
       override def transform(node: Node) = node match {
         case e: Elem if e.label == "dependency" && {
           val org = e.attribute("org").getOrElse("").toString
@@ -271,7 +271,7 @@ def removePomDependencies(deps: (String, String)*): Seq[Setting[_]] = Seq(
         } => Seq.empty
         case n => Seq(n)
       }
-    })).transform(Seq(XML.loadFile(f))).head
+    }).transform(Seq(XML.loadFile(f))).head
     XML.save(f.getAbsolutePath, e, xmlDecl = true)
     f
   }
@@ -304,7 +304,7 @@ lazy val setJarLocation: Setting[_] =
 lazy val scalaSubprojectSettings: Seq[Setting[_]] = commonSettings :+ setJarLocation
 
 def filterDocSources(ff: FileFilter): Seq[Setting[_]] = Seq(
-  sources in (Compile, doc) ~= (_.filter(ff.accept _)),
+  sources in (Compile, doc) ~= (_.filter(ff.accept)),
   // Excluded sources may still be referenced by the included sources, so we add the compiler
   // output to the scaladoc classpath to resolve them. For the `library` project this is
   // always required because otherwise the compiler cannot even initialize Definitions without
@@ -620,16 +620,15 @@ lazy val test = project
     testFrameworks += new TestFramework("scala.tools.partest.sbt.Framework"),
     testOptions in IntegrationTest += Tests.Setup( () => (root.base.getAbsolutePath + "/pull-binary-libs.sh").! ),
     testOptions in IntegrationTest += Tests.Argument("-Dpartest.java_opts=-Xmx1024M -Xms64M -XX:MaxPermSize=128M"),
-    definedTests in IntegrationTest += (
-      new sbt.TestDefinition(
-        "partest",
-        // marker fingerprint since there are no test classes
-        // to be discovered by sbt:
-        new sbt.testing.AnnotatedFingerprint {
-          def isModule = true
-          def annotationName = "partest"
-        }, true, Array())
-     )
+    definedTests in IntegrationTest += new sbt.TestDefinition(
+      "partest",
+      // marker fingerprint since there are no test classes
+      // to be discovered by sbt:
+      new sbt.testing.AnnotatedFingerprint {
+        def isModule = true
+        def annotationName = "partest"
+      }, true, Array()
+    )
   )
 
 lazy val manual = configureAsSubproject(project)
@@ -928,7 +927,7 @@ intellij := {
 
   def moduleDep(name: String, jars: Seq[File]) = {
     val entries = jars.map(f => s"""        <root url="jar://${f.toURI.getRawPath}!/" />""").mkString("\n")
-    s"""|    <library name="${name}-deps">
+    s"""|    <library name="$name-deps">
         |      <CLASSES>
         |$entries
         |      </CLASSES>
