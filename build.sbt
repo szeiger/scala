@@ -55,25 +55,23 @@
 
 import VersionUtil._
 
-val bootstrapScalaVersion = versionProps("starr.version")
+// Scala dependencies:
+val scalaContinuationsPluginDep  = scalaDep("org.scala-lang.plugins", "scala-continuations-plugin", compatibility = "full")
+val scalaContinuationsLibraryDep = scalaDep("org.scala-lang.plugins", "scala-continuations-library")
+val scalaParserCombinatorsDep    = scalaDep("org.scala-lang.modules", "scala-parser-combinators")
+val scalaSwingDep                = scalaDep("org.scala-lang.modules", "scala-swing")
+val scalaXmlDep                  = scalaDep("org.scala-lang.modules", "scala-xml")
+val partestDep                   = scalaDep("org.scala-lang.modules", "scala-partest", "partest")
+val akkaActorDep                 = scalaDep("com.typesafe.akka", "akka-actor")
+val actorsMigrationDep           = scalaDep("org.scala-lang", "scala-actors-migration", "actors-migration")
+val scalacheckDep                = scalaDep("org.scalacheck", "scalacheck", scope = "it")
 
-def withoutScalaLang(moduleId: ModuleID): ModuleID = moduleId exclude("org.scala-lang", "*")
-
-// exclusion of the scala-library transitive dependency avoids eviction warnings during `update`.
-val actorsMigrationDep = withoutScalaLang("org.scala-lang" %% "scala-actors-migration" % versionNumber("actors-migration"))
-val akkaActorDep = withoutScalaLang("com.typesafe.akka" %% "akka-actor" % versionNumber("akka-actor"))
-val scalaContinuationsLibraryDep = withoutScalaLang("org.scala-lang.plugins" %% "scala-continuations-library" % versionNumber("scala-continuations-library"))
-val scalaContinuationsPluginDep = withoutScalaLang("org.scala-lang.plugins" % ("scala-continuations-plugin_" + versionProps("scala.full.version")) % versionNumber("scala-continuations-plugin"))
-val scalaParserCombinatorsDep = withoutScalaLang("org.scala-lang.modules" %% "scala-parser-combinators" % versionNumber("scala-parser-combinators"))
-val scalaSwingDep = withoutScalaLang("org.scala-lang.modules" %% "scala-swing" % versionNumber("scala-swing"))
-val scalaXmlDep = withoutScalaLang("org.scala-lang.modules" %% "scala-xml" % versionNumber("scala-xml"))
-val partestDep = withoutScalaLang("org.scala-lang.modules" %% "scala-partest" % versionNumber("partest"))
+// Non-Scala dependencies:
 val junitDep = "junit" % "junit" % "4.11"
 val junitIntefaceDep = "com.novocode" % "junit-interface" % "0.11" % "test"
 val asmDep = "org.scala-lang.modules" % "scala-asm" % versionProps("scala-asm.version")
 val jlineDep = "jline" % "jline" % versionProps("jline.version")
 val antDep = "org.apache.ant" % "ant" % "1.9.4"
-val scalacheckDep = withoutScalaLang("org.scalacheck" %% "scalacheck" % versionNumber("scalacheck") % "it")
 
 /** Publish to ./dists/maven-sbt, similar to the ANT build which publishes to ./dists/maven. This
   * can be used to compare the output of the sbt and ANT builds during the transition period. Any
@@ -120,17 +118,14 @@ baseVersionSuffix in Global := "SNAPSHOT"
 
 lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings ++ Seq[Setting[_]](
   organization := "org.scala-lang",
-  scalaVersion := bootstrapScalaVersion,
   // we don't cross build Scala itself
   crossPaths := false,
   // do not add Scala library jar as a dependency automatically
   autoScalaLibrary := false,
-  // we also do not add scala instance automatically because it introduces
-  // a circular instance, see: https://github.com/sbt/sbt/issues/1872
+  // Avoid circular dependencies for scalaInstance (see https://github.com/sbt/sbt/issues/1872)
   managedScalaInstance := false,
-  // this is a way to workaround issue described in https://github.com/sbt/sbt/issues/1872
-  // check it out for more details
-  scalaInstance := ScalaInstance(scalaVersion.value, appConfiguration.value.provider.scalaProvider.launcher getScala scalaVersion.value),
+  scalaInstance := (scalaInstance in bootstrap).value,
+  scalaVersion := (scalaVersion in bootstrap).value,
   // we always assume that Java classes are standalone and do not have any dependency
   // on Scala classes
   compileOrder := CompileOrder.JavaThenScala,
@@ -325,6 +320,11 @@ def regexFileFilter(s: String): FileFilter = new FileFilter {
   val pat = s.r.pattern
   def accept(f: File) = pat.matcher(f.getAbsolutePath.replace('\\', '/')).matches()
 }
+
+// This project provides the STARR scalaInstance for bootstrapping
+lazy val bootstrap = (project in file("target/bootstrap")).settings(
+  scalaVersion := versionProps("starr.version")
+)
 
 lazy val library = configureAsSubproject(project)
   .settings(generatePropertiesFileSettings: _*)

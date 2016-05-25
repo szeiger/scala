@@ -4,7 +4,7 @@ import complete.DefaultParsers._
 
 /** Custom commands for use by the Jenkins scripts. This keeps the surface area and call syntax small. */
 object ScriptCommands {
-  def all = Seq(setupPublishCore)
+  def all = Seq(setupPublishCore, setupValidateTest)
 
   /** Set up the environment for `validate/publish-core`. The argument is the Artifactory snapshot repository URL. */
   def setupPublishCore = Command.single("setupPublishCore") { case (state, url) =>
@@ -16,4 +16,13 @@ object ScriptCommands {
         scalacOptions in Compile in ThisBuild += "-optimise"
       ), state)
     }
+
+  /** Set up the environment for `validate/test`. The argument is the Artifactory snapshot repository URL. */
+  def setupValidateTest = Command.single("setupValidateTest") { case (state, url) =>
+    //TODO When ant is gone, pass starr version as an argument to this command instead of using version.properties
+    Project.extract(state).append(Seq(
+      resolvers in Global += "scala-pr" at url,
+      scalacOptions in Compile in ThisBuild += "-optimise"
+    ), state)
+  }
 }

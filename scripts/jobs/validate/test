@@ -7,7 +7,7 @@ scriptsDir="$baseDir/scripts"
 function runsbt() {
   $SBT_CMD \
      -Dstarr.version=$scalaVersion \
-     -Dextra.repo.url=$prRepoUrl \
+     "setupValidateTest $prRepoUrl" \
      $testExtraArgs \
      "$@"
 }
@@ -23,24 +23,18 @@ case $prDryRun in
     # build quick using STARR built upstream, as specified by scalaVersion
     # (in that sense it's locker, since it was built with starr by that upstream job);
     # and run JUnit tests
-    # runsbt ${testTarget-test}
+    runsbt "test"
 
     # multiple invocations to conserve PermGen
-    runsbt "test/it:testOnly -- run"
-    runsbt "test/it:testOnly -- pos"
-    runsbt "test/it:testOnly -- neg"
-    runsbt "test/it:testOnly -- run"
-    runsbt "test/it:testOnly -- jvm"
-    runsbt "test/it:testOnly -- res"
-    runsbt "test/it:testOnly -- scalap"
-    runsbt "test/it:testOnly -- specialized"
-    runsbt "test/it:testOnly -- scalacheck"
-    runsbt "test/it:testOnly -- instrumented"
-    runsbt "test/it:testOnly -- presentation"
+    runsbt "partest run pos"
+    runsbt "partest neg jvm"
+    runsbt "partest res scalap"
+    runsbt "partest specialized scalacheck"
+    runsbt "partest instrumented presentation"
 
     # TODO before merge
-    #runsbt "test/it:testOnly -- --srcpath scaladoc --run"
-    #runsbt "test/it:testOnly -- --srcpath scaladoc --scalacheck"
+    #runsbt "partest --srcpath scaladoc --run"
+    #runsbt "partest --srcpath scaladoc --scalacheck"
 
     # Migration Manager; make sure Scaladoc doesn't bomb
     runsbt mima doc

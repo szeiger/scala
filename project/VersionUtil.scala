@@ -123,4 +123,13 @@ object VersionUtil {
   /** Get a subproject version number from `versionProps` */
   def versionNumber(name: String): String =
     versionProps(s"$name.version.number")
+
+  /** Build a dependency to a Scala module with the given group and artifact ID */
+  def scalaDep(group: String, artifact: String, versionProp: String = null, scope: String = null, compatibility: String = "binary") = {
+    val vp = if(versionProp eq null) artifact else versionProp
+    val m = group % (artifact + "_" + versionProps(s"scala.$compatibility.version")) % versionNumber(vp)
+    val m2 = if(scope eq null) m else m % scope
+    // exclusion of the scala-library transitive dependency avoids eviction warnings during `update`:
+    m exclude("org.scala-lang", "*")
+  }
 }
