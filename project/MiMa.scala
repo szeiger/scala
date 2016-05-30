@@ -18,7 +18,7 @@ object MiMa {
 
   lazy val settings =
     Seq(
-      mimaOldVersion := s"${scalaBinaryVersion.value}.0",
+      mimaOldVersion := VersionUtil.versionProps("scala.binary.version") + ".0",
       mima := {
         val log = streams.value.log
         def runOnce(prev: java.io.File, curr: java.io.File, isForward: Boolean): Unit = {
