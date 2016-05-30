@@ -36,9 +36,7 @@ case $prDryRun in
     runsbt "partest specialized scalacheck"
     runsbt "partest instrumented presentation"
 
-    # TODO before merge
-    #runsbt "partest --srcpath scaladoc --run"
-    #runsbt "partest --srcpath scaladoc --scalacheck"
+    runsbt "partest --srcpath scaladoc"
 
     # Migration Manager; make sure Scaladoc doesn't bomb
     runsbt mima doc
