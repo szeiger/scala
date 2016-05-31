@@ -39,7 +39,7 @@ case $prDryRun in
     runsbt "partest --srcpath scaladoc"
 
     # Migration Manager; make sure Scaladoc doesn't bomb
-    runsbt mima doc
+    runsbt library/mima reflect/mima doc
 
     ;;
 
