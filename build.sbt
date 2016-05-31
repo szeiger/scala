@@ -619,6 +619,7 @@ lazy val test = project
     javaOptions in IntegrationTest += "-Xmx1G",
     testFrameworks += new TestFramework("scala.tools.partest.sbt.Framework"),
     testOptions in IntegrationTest += Tests.Argument("-Dpartest.java_opts=-Xmx1024M -Xms64M -XX:MaxPermSize=128M"),
+    testOptions in IntegrationTest += Tests.Argument("-Dpartest.scalac_opts=" + (scalacOptions in Compile).value.mkString(" ")),
     definedTests in IntegrationTest += new sbt.TestDefinition(
       "partest",
       // marker fingerprint since there are no test classes
