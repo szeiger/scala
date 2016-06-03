@@ -161,6 +161,7 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
     "-sourcepath", (baseDirectory in ThisBuild).value.toString,
     "-doc-source-url", s"https://github.com/scala/scala/tree/${versionProperties.value.githubTree}€{FILE_PATH}.scala#L1"
   ),
+  incOptions <<= (incOptions in LocalProject("root")),
   homepage := Some(url("http://www.scala-lang.org")),
   startYear := Some(2002),
   licenses += (("BSD 3-Clause", url("http://www.scala-lang.org/license.html"))),
@@ -750,7 +751,7 @@ lazy val scalaDist = Project("scala-dist", file(".") / "target" / "scala-dist-di
   )
   .dependsOn(libraryAll, compiler, scalap)
 
-lazy val root = (project in file("."))
+lazy val root: Project = (project in file("."))
   .settings(disableDocs: _*)
   .settings(disablePublishing: _*)
   .settings(generateBuildCharacterFileSettings: _*)
@@ -758,8 +759,10 @@ lazy val root = (project in file("."))
     publish := {},
     publishLocal := {},
     commands ++= ScriptCommands.all,
-    Quiet.silenceIvyUpdateInfoLogging
-)
+    Quiet.silenceIvyUpdateInfoLogging,
+    antStyle := false,
+    incOptions := incOptions.value.withNameHashing(!antStyle.value).withAntStyle(antStyle.value)
+  )
   .aggregate(library, forkjoin, reflect, compiler, interactive, repl, replJline, replJlineEmbedded,
     scaladoc, scalap, actors, partestExtras, junit, libraryAll, scalaDist).settings(
     sources in Compile := Seq.empty,
@@ -848,6 +851,7 @@ def configureAsForkOfJavaProject(project: Project): Project = {
 }
 
 lazy val buildDirectory = settingKey[File]("The directory where all build products go. By default ./build")
+lazy val antStyle = settingKey[Boolean]("Use ant-style incremental builds instead of name-hashing")
 lazy val mkBin = taskKey[Seq[File]]("Generate shell script (bash or Windows batch).")
 lazy val mkQuick = taskKey[File]("Generate a full build, including scripts, in build/quick")
 lazy val mkPack = taskKey[File]("Generate a full build, including scripts, in build/pack")
