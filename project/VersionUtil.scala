@@ -130,6 +130,6 @@ object VersionUtil {
     val m = group % (artifact + "_" + versionProps(s"scala.$compatibility.version")) % versionNumber(vp)
     val m2 = if(scope eq null) m else m % scope
     // exclusion of the scala-library transitive dependency avoids eviction warnings during `update`:
-    m exclude("org.scala-lang", "*")
+    m2.exclude("org.scala-lang", "*")
   }
 }
