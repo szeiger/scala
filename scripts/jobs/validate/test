@@ -38,6 +38,9 @@ case $prDryRun in
 
     runsbt "partest --srcpath scaladoc"
 
+    # OSGi tests
+    runsbt osgiTestFelix/test osgiTestEclipse/test
+
     # Migration Manager; make sure Scaladoc doesn't bomb
     runsbt library/mima reflect/mima doc
 

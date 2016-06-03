@@ -580,6 +580,54 @@ lazy val junit = project.in(file("test") / "junit")
     unmanagedSourceDirectories in Test := List(baseDirectory.value)
   )
 
+lazy val osgiTestFelix = osgiTestProject(
+  project.in(file(".") / "target" / "osgiTestFelix"),
+  "org.apache.felix" % "org.apache.felix.framework" % "4.4.0")
+
+lazy val osgiTestEclipse = osgiTestProject(
+  project.in(file(".") / "target" / "osgiTestEclipse"),
+  "org.eclipse.osgi" % "org.eclipse.osgi" % "3.7.1")
+
+def osgiTestProject(p: Project, framework: ModuleID) = p
+  .dependsOn(library, reflect, compiler, actors, forkjoin)
+  .settings(clearSourceAndResourceDirectories: _*)
+  .settings(commonSettings: _*)
+  .settings(disableDocs: _*)
+  .settings(disablePublishing: _*)
+  .settings(
+    fork in Test := true,
+    parallelExecution in Test := false,
+    libraryDependencies ++= {
+      val paxExamVersion = "3.5.0" // Last version which supports Java 6
+      Seq(
+        junitDep,
+        junitIntefaceDep,
+        "org.ops4j.pax.exam" % "pax-exam-container-native" % paxExamVersion
+          exclude("org.osgi", "org.osgi.core"), // Avoid dragging in a dependency which requires Java >6
+        "org.osgi" % "org.osgi.core" % "4.2.0" % "provided", // The framework (Felix / Eclipse) provides the classes
+        "org.ops4j.pax.exam" % "pax-exam-junit4" % paxExamVersion,
+        "org.ops4j.pax.exam" % "pax-exam-link-assembly" % paxExamVersion,
+        "org.ops4j.pax.url" % "pax-url-aether" % "2.2.0",
+        "org.ops4j.pax.swissbox" % "pax-swissbox-tracker" % "1.8.0",
+        "ch.qos.logback" % "logback-core" % "1.1.2",
+        "ch.qos.logback" % "logback-classic" % "1.1.2",
+        framework % "test"
+      )
+    },
+    Keys.test in Test <<= Keys.test in Test dependsOn (packageBin in Compile),
+    testOptions += Tests.Argument(TestFrameworks.JUnit, "-a", "-v"),
+    unmanagedSourceDirectories in Test := List((baseDirectory in ThisBuild).value / "test" / "osgi" / "src"),
+    packageBin in Compile := { // Put the bundle JARs required for the tests into build/osgi
+      val targetDir = (buildDirectory in ThisBuild).value / "osgi"
+      val mappings = ((mkPack in dist).value / "lib").listFiles.collect {
+        case f if f.getName.startsWith("scala-") && f.getName.endsWith(".jar") => (f, targetDir / f.getName)
+      }
+      IO.copy(mappings, overwrite = true)
+      targetDir
+    },
+    cleanFiles += (buildDirectory in ThisBuild).value / "osgi"
+  )
+
 lazy val partestJavaAgent = Project("partest-javaagent", file(".") / "src" / "partest-javaagent")
   .settings(commonSettings: _*)
   .settings(generatePropertiesFileSettings: _*)
@@ -735,8 +783,9 @@ lazy val dist = (project in file("dist"))
       val props = new java.util.Properties()
       props.setProperty("partest.classpath", cp.map(_.data.getAbsolutePath).mkString(sys.props("path.separator")))
       IO.write(props, null, propsFile)
+      (buildDirectory in ThisBuild).value / "quick"
     } dependsOn ((distDependencies.map(products in Runtime in _) :+ mkBin): _*),
-    mkPack <<= Def.task {} dependsOn (packagedArtifact in (Compile, packageBin), mkBin),
+    mkPack <<= Def.task { (buildDirectory in ThisBuild).value / "pack" } dependsOn (packagedArtifact in (Compile, packageBin), mkBin),
     target := (baseDirectory in ThisBuild).value / "target" / thisProject.value.id,
     packageBin in Compile := {
       val extraDeps = Set(scalaContinuationsLibraryDep, scalaContinuationsPluginDep, scalaSwingDep, scalaParserCombinatorsDep, scalaXmlDep)
@@ -800,8 +849,8 @@ def configureAsForkOfJavaProject(project: Project): Project = {
 
 lazy val buildDirectory = settingKey[File]("The directory where all build products go. By default ./build")
 lazy val mkBin = taskKey[Seq[File]]("Generate shell script (bash or Windows batch).")
-lazy val mkQuick = taskKey[Unit]("Generate a full build, including scripts, in build/quick")
-lazy val mkPack = taskKey[Unit]("Generate a full build, including scripts, in build/pack")
+lazy val mkQuick = taskKey[File]("Generate a full build, including scripts, in build/quick")
+lazy val mkPack = taskKey[File]("Generate a full build, including scripts, in build/pack")
 
 // Defining these settings is somewhat redundant as we also redefine settings that depend on them.
 // However, IntelliJ's project import works better when these are set correctly.
