@@ -61,17 +61,17 @@ val scalaContinuationsLibraryDep = scalaDep("org.scala-lang.plugins", "scala-con
 val scalaParserCombinatorsDep    = scalaDep("org.scala-lang.modules", "scala-parser-combinators")
 val scalaSwingDep                = scalaDep("org.scala-lang.modules", "scala-swing")
 val scalaXmlDep                  = scalaDep("org.scala-lang.modules", "scala-xml")
-val partestDep                   = scalaDep("org.scala-lang.modules", "scala-partest", "partest")
-val akkaActorDep                 = scalaDep("com.typesafe.akka", "akka-actor")
-val actorsMigrationDep           = scalaDep("org.scala-lang", "scala-actors-migration", "actors-migration")
-val scalacheckDep                = scalaDep("org.scalacheck", "scalacheck", scope = "it")
+val partestDep                   = scalaDep("org.scala-lang.modules", "scala-partest",              versionProp = "partest")
+val akkaActorDep                 = scalaDep("com.typesafe.akka",      "akka-actor")
+val actorsMigrationDep           = scalaDep("org.scala-lang",         "scala-actors-migration",     versionProp = "actors-migration")
+val scalacheckDep                = scalaDep("org.scalacheck",         "scalacheck",                 scope = "it")
 
 // Non-Scala dependencies:
-val junitDep = "junit" % "junit" % "4.11"
-val junitIntefaceDep = "com.novocode" % "junit-interface" % "0.11" % "test"
-val asmDep = "org.scala-lang.modules" % "scala-asm" % versionProps("scala-asm.version")
-val jlineDep = "jline" % "jline" % versionProps("jline.version")
-val antDep = "org.apache.ant" % "ant" % "1.9.4"
+val junitDep         = "junit"                  % "junit"           % "4.11"
+val junitIntefaceDep = "com.novocode"           % "junit-interface" % "0.11"                            % "test"
+val asmDep           = "org.scala-lang.modules" % "scala-asm"       % versionProps("scala-asm.version")
+val jlineDep         = "jline"                  % "jline"           % versionProps("jline.version")
+val antDep           = "org.apache.ant"         % "ant"             % "1.9.4"
 
 /** Publish to ./dists/maven-sbt, similar to the ANT build which publishes to ./dists/maven. This
   * can be used to compare the output of the sbt and ANT builds during the transition period. Any

@@ -23,7 +23,7 @@ object Test extends ScaladocModelTest {
   override def scaladocSettings = {
     val samplePath = getClass.getClassLoader.getResource("scala/Function1.class").getPath.replace('\\', '/')
     val scalaLibPath = if(samplePath.contains("!")) { // in scala-library.jar
-    val scalaLibUri = samplePath.split("!")(0)
+      val scalaLibUri = samplePath.split("!")(0)
       val p = new URI(scalaLibUri).getPath
       // this is a bit fragile (depends on the scala library being in build/pack as produced by ant)
       p.replace("/pack/lib/scala-library.jar", "/pack/bin/../lib/scala-library.jar")
