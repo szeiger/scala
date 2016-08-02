@@ -2002,8 +2002,12 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
       val tpt1 = checkNoEscaping.privates(sym, typedType(vdef.tpt))
       checkNonCyclic(vdef, tpt1)
 
-      if (sym.hasAnnotation(definitions.VolatileAttr) && !sym.isMutable)
+      // Discard `@volatile` annotations on parameters of synthetic case class `apply` methods
+      val discardVolatile = sym.hasAnnotation(definitions.VolatileAttr) && sym.owner.isCaseApplyOrUnapply
+      if (sym.hasAnnotation(definitions.VolatileAttr) && !sym.isMutable && !discardVolatile)
         VolatileValueError(vdef)
+
+      //TODO: actually discard it. let's see if we can get away with not doing that just for the benchmarks for 7838...
 
       val rhs1 =
         if (vdef.rhs.isEmpty) {
