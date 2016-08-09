@@ -964,7 +964,7 @@ abstract class BCodeHelpers extends BCodeIdiomatic with BytecodeWriters {
 
       val linkedClass  = moduleClass.companionClass
       lazy val conflictingNames: Set[Name] = {
-        (linkedClass.info.members collect { case sym if sym.name.isTermName => sym.name }).toSet
+        (linkedClass.info.members collect { case sym if sym.name.isTermName => sym.name: Name }).toSet
       }
       debuglog(s"Potentially conflicting names for forwarders: $conflictingNames")
 

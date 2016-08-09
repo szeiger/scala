@@ -12,6 +12,7 @@ package immutable
 
 import generic._
 import parallel.immutable.ParMap
+import scala.annotation.unchecked.{ uncheckedVariance => uV }
 
 /**
  *  A generic template for immutable maps from keys of type `K`
@@ -117,7 +118,7 @@ self =>
     // ImmutableDefaultKeySet is only protected, so we won't warn on override.
     // Someone could override in a way that makes widening not okay
     // (e.g. by overriding +, though the version in this class is fine)
-    override def toSet[B >: K]: Set[B] = this.asInstanceOf[Set[B]]
+    override def toSet: Set[K @uV] = this
   }
 
   /** This function transforms all the values of mappings contained

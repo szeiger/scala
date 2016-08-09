@@ -13,6 +13,7 @@ package collection
 package immutable
 
 import generic._
+import scala.annotation.unchecked.{uncheckedVariance => uV}
 import scala.collection.parallel.immutable.ParHashSet
 import scala.collection.GenSet
 import scala.annotation.tailrec
@@ -22,8 +23,7 @@ import scala.annotation.tailrec
  *  '''Note:''' The builder of this hash set may return specialized representations for small sets.
  *
  *  @tparam A      the type of the elements contained in this hash set.
- *
- *  @author  Martin Odersky
+  *  @author  Martin Odersky
  *  @author  Tiark Rompf
  *  @version 2.8
  *  @since   2.3
@@ -68,7 +68,8 @@ sealed class HashSet[A] extends AbstractSet[A]
   /**
    * A specialized implementation of subsetOf for when both this and that are HashSet[A] and we can take advantage
    * of the tree structure of both operands and the precalculated hashcodes of the HashSet1 instances.
-   * @param that the other set
+    *
+    * @param that the other set
    * @param level the level of this and that hashset
    *              The purpose of level is to keep track of how deep we are in the tree.
    *              We need this information for when we arrive at a leaf and have to call get0 on that
@@ -108,7 +109,8 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   /**
    * Union with a leaf HashSet at a given level.
-   * @param that a leaf HashSet
+    *
+    * @param that a leaf HashSet
    * @param level the depth in the tree. We need this when we have to create a branch node on top of this and that
    * @return The union of this and that at the given level. Unless level is zero, the result is not a self-contained
    *         HashSet but needs to be stored at the correct depth
@@ -120,7 +122,8 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   /**
    * Union with a HashSet at a given level
-   * @param that a HashSet
+    *
+    * @param that a HashSet
    * @param level the depth in the tree. We need to keep track of the level to know how deep we are in the tree
    * @param buffer a temporary buffer that is used for temporarily storing elements when creating new branch nodes
    * @param offset0 the first offset into the buffer in which we are allowed to write
@@ -134,7 +137,8 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   /**
    * Intersection with another hash set at a given level
-   * @param level the depth in the tree. We need to keep track of the level to know how deep we are in the tree
+    *
+    * @param level the depth in the tree. We need to keep track of the level to know how deep we are in the tree
    * @param buffer a temporary buffer that is used for temporarily storing elements when creating new branch nodes
    * @param offset0 the first offset into the buffer in which we are allowed to write
    * @return The intersection of this and that at the given level. Unless level is zero, the result is not a
@@ -147,7 +151,8 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   /**
    * Diff with another hash set at a given level
-   * @param level the depth in the tree. We need to keep track of the level to know how deep we are in the tree
+    *
+    * @param level the depth in the tree. We need to keep track of the level to know how deep we are in the tree
    * @param buffer a temporary buffer that is used for temporarily storing elements when creating new branch nodes
    * @param offset0 the first offset into the buffer in which we are allowed to write
    * @return The diff of this and that at the given level. Unless level is zero, the result is not a
@@ -195,14 +200,14 @@ sealed class HashSet[A] extends AbstractSet[A]
 
   protected def writeReplace(): AnyRef = new HashSet.SerializationProxy(this)
 
-  override def toSet[B >: A]: Set[B] = this.asInstanceOf[HashSet[B]]
+  override def toSet: Set[A @uV] = this
 }
 
 /** $factoryInfo
- *  @define Coll `immutable.HashSet`
+  *
+  *  @define Coll `immutable.HashSet`
  *  @define coll immutable hash set
- *
- *  @author  Tiark Rompf
+  *  @author  Tiark Rompf
  *  @since   2.3
  *  @define Coll `immutable.HashSet`
  *  @define coll immutable hash set
@@ -981,7 +986,8 @@ object HashSet extends ImmutableSetFactory[HashSet] {
 
   /**
    * Calculates the maximum buffer size given the maximum possible total size of the trie-based collection
-   * @param size the maximum size of the collection to be generated
+    *
+    * @param size the maximum size of the collection to be generated
    * @return the maximum buffer size
    */
   @inline private def bufferSize(size: Int): Int = (size + 6) min (32 * 7)

@@ -12,6 +12,7 @@ package immutable
 
 import generic._
 import scala.annotation.tailrec
+import scala.annotation.unchecked.{uncheckedVariance => uV}
 
 /**
   * $factoryInfo
@@ -50,7 +51,6 @@ object ListSet extends ImmutableSetFactory[ListSet] {
   * constructor directly, or by applying the function `ListSet.empty`.
   *
   * @tparam A the type of the elements contained in this list set
-  *
   * @author Matthias Zenger
   * @version 1.0, 09/07/2003
   * @since 1
@@ -96,7 +96,7 @@ sealed class ListSet[A] extends AbstractSet[A]
   protected def elem: A = throw new NoSuchElementException("elem of empty set")
   protected def next: ListSet[A] = throw new NoSuchElementException("next of empty set")
 
-  override def toSet[B >: A]: Set[B] = this.asInstanceOf[ListSet[B]]
+  override def toSet: Set[A @uV] = this
 
   override def stringPrefix = "ListSet"
 

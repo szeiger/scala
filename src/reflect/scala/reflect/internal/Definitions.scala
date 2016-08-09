@@ -1393,9 +1393,9 @@ trait Definitions extends api.StandardDefinitions {
     lazy val symbolsNotPresentInBytecode = syntheticCoreClasses ++ syntheticCoreMethods ++ hijackedCoreClasses
 
     /** Is the symbol that of a parent which is added during parsing? */
-    lazy val isPossibleSyntheticParent = ProductClass.seq.toSet[Symbol] + ProductRootClass + SerializableClass
+    lazy val isPossibleSyntheticParent = (ProductClass.seq: IndexedSeq[Symbol]).toSet + ProductRootClass + SerializableClass
 
-    private lazy val boxedValueClassesSet = boxedClass.values.toSet[Symbol] + BoxedUnitClass
+    private lazy val boxedValueClassesSet = (boxedClass.values: Iterable[Symbol]).toSet + BoxedUnitClass
 
     /** Is symbol a value class? */
     def isPrimitiveValueClass(sym: Symbol) = ScalaValueClasses contains sym
@@ -1492,8 +1492,8 @@ trait Definitions extends api.StandardDefinitions {
 
       lazy val boxMethod        = classesMap(x => valueCompanionMember(x, nme.box))
       lazy val unboxMethod      = classesMap(x => valueCompanionMember(x, nme.unbox))
-      lazy val isUnbox          = unboxMethod.values.toSet[Symbol]
-      lazy val isBox            = boxMethod.values.toSet[Symbol]
+      lazy val isUnbox          = (unboxMethod.values: Iterable[Symbol]).toSet
+      lazy val isBox            = (boxMethod.values: Iterable[Symbol]).toSet
 
       lazy val Boolean_and = definitions.Boolean_and
       lazy val Boolean_or = definitions.Boolean_or

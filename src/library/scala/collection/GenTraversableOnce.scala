@@ -624,7 +624,7 @@ trait GenTraversableOnce[+A] extends Any {
    *  $willNotTerminateInf
    *  @return      a set containing all elements of this $coll.
    */
-  def toSet[A1 >: A]: GenSet[A1]
+  def toSet: GenSet[A @uV]
 
   /** Converts this $coll to a map.  This method is unavailable unless
    *  the elements are members of Tuple2, each ((T, U)) becoming a key-value

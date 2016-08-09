@@ -14,6 +14,7 @@ package immutable
 
 import generic._
 import mutable.Builder
+import scala.annotation.unchecked.{ uncheckedVariance => uV }
 
 /** A map whose keys are sorted.
  *
@@ -52,9 +53,9 @@ self =>
       val map = self.rangeImpl(from, until)
       new map.DefaultKeySortedSet
     }
-    override def toSet[C >: A]: Set[C] = {
+    override def toSet: Set[A @uV] = {
       // This way of building sets typically has the best benchmarks, surprisingly!
-      val sb = Set.newBuilder[C]
+      val sb = Set.newBuilder[A]
       foreach(sb += _)
       sb.result()
     }

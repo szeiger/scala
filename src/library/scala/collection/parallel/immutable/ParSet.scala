@@ -13,6 +13,7 @@ package parallel.immutable
 import scala.collection.generic._
 import scala.collection.parallel.ParSetLike
 import scala.collection.parallel.Combiner
+import scala.annotation.unchecked.{ uncheckedVariance => uV }
 
 /** An immutable variant of `ParSet`.
  *
@@ -34,7 +35,7 @@ self =>
   override def stringPrefix = "ParSet"
 
   // ok, because this could only violate `apply` and we can live with that
-  override def toSet[U >: T]: ParSet[U] = this.asInstanceOf[ParSet[U]]
+  override def toSet: ParSet[T @uV] = this
 }
 
 /** $factoryInfo
