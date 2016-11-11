@@ -9,6 +9,8 @@
 package scala
 package collection
 
+import scala.collection.generic.CanBuildFrom
+
 /** A trait for all maps upon which operations may be
  *  implemented in parallel.
  *
@@ -29,6 +31,120 @@ trait GenMapLike[K, +V, +Repr] extends GenIterableLike[(K, V), Repr] with Equals
   def seq: Map[K, V]
   def +[V1 >: V](kv: (K, V1)): GenMap[K, V1]
   def - (key: K): Repr
+
+  // repeated here to override the scaladoc comment
+  /** Returns a new $coll containing the elements from the left hand operand followed by the elements from the
+   *  right hand operand. The element type of the $coll is the most specific superclass encompassing
+   *  the element types of the two operands.
+   *
+   *  @param that   the traversable to append.
+   *  @tparam B     the element type of the returned collection.
+   *  @tparam That  $thatinfo
+   *  @param bf     $bfinfo
+   *  @return       a new collection of type `That` which contains all elements
+   *                of this $coll followed by all elements of `that`.
+   *
+   *  @usecase def ++[K2, V2](that: GenTraversableOnce[(K2, V2)]): $Coll[K2, V2]
+   *    @inheritdoc
+   *
+   *    Example:
+   *    {{{
+   *      scala> val m = Map(1-> "a", 2 -> "b")
+   *      m: Map[Int,String] = Map(1 -> a, 2 -> b)
+   *
+   *      scala> val l = List((3, 0))
+   *      l: List[(Int, Int)] = List((3,0))
+   *
+   *      scala> val m2 = m ++ l
+   *      m2: Map[Int,Any] = Map(1 -> a, 2 -> b, 3 -> 0)
+   *    }}}
+   *
+   *    @return       a new $coll which contains all elements of this $coll
+   *                  followed by all elements of `that`.
+   */
+  def ++[B >: (K, V), That](that: GenTraversableOnce[B])(implicit bf: CanBuildFrom[Repr, B, That]): That
+
+  // repeated here to override the scaladoc comment
+  /** Builds a new collection by applying a partial function to all elements of this $coll
+   *  on which the function is defined.
+   *
+   *  @param pf     the partial function which filters and maps the $coll.
+   *  @tparam B     the element type of the returned collection.
+   *  @tparam That  $thatinfo
+   *  @param bf     $bfinfo
+   *  @return       a new collection of type `That` resulting from applying the partial function
+   *                `pf` to each element on which it is defined and collecting the results.
+   *                The order of the elements is preserved.
+   *
+   *  @usecase def collect[K2, V2](pf: PartialFunction[(K, V), (K2, V2)]): $Coll[K2, V2]
+   *    @inheritdoc
+   *
+   *    $collectExample
+   *
+   *    @return       a new $coll resulting from applying the given partial function
+   *                  `pf` to each element on which it is defined and collecting the results.
+   *                  The order of the elements is preserved.
+   */
+  def collect[B, That](pf: PartialFunction[(K, V), B])(implicit bf: CanBuildFrom[Repr, B, That]): That
+
+  // repeated here to override the scaladoc comment
+  /** Builds a new collection by applying a function to all elements of this $coll
+   *  and using the elements of the resulting collections.
+   *
+   *  @param f      the function to apply to each element.
+   *  @tparam B     the element type of the returned collection.
+   *  @tparam That  $thatinfo
+   *  @param bf     $bfinfo
+   *  @return       a new collection of type `That` resulting from applying the given collection-valued function
+   *                `f` to each element of this $coll and concatenating the results.
+   *
+   *  @usecase def flatMap[K2, V2](f: ((K, V)) => GenTraversableOnce[(K2, V2)]): $Coll[K2, V2]
+   *    @inheritdoc
+   *
+   *    For example:
+   *
+   *    {{{
+   *      val ys = Map("a" -> List(1 -> 11,1 -> 111), "b" -> List(2 -> 22,2 -> 222)).flatMap(_._2)
+   *    }}}
+   *
+   *    The type of the resulting collection is guided by the static type of $coll. This might
+   *    cause unexpected results sometimes. For example:
+   *
+   *    {{{
+   *      // lettersOf will return a Seq[Char] of likely repeated letters, instead of a Set
+   *      def lettersOf(words: Seq[String]) = words flatMap (word => word.toSet)
+   *
+   *      // lettersOf will return a Set[Char], not a Seq
+   *      def lettersOf(words: Seq[String]) = words.toSet flatMap (word => word.toSeq)
+   *
+   *      // xs will be an Iterable[Int]
+   *      val xs = Map("a" -> List(11,111), "b" -> List(22,222)).flatMap(_._2)
+   *
+   *      // ys will be a Map[Int, Int]
+   *      val ys = Map("a" -> List(1 -> 11,1 -> 111), "b" -> List(2 -> 22,2 -> 222)).flatMap(_._2)
+   *    }}}
+   *
+   *    @return       a new $coll resulting from applying the given collection-valued function
+   *                  `f` to each element of this $coll and concatenating the results.
+   */
+  def flatMap[B, That](f: ((K, V)) => GenTraversableOnce[B])(implicit bf: CanBuildFrom[Repr, B, That]): That
+
+  // repeated here to override the scaladoc comment
+  /** Builds a new collection by applying a function to all elements of this $coll.
+   *
+   *  @param f      the function to apply to each element.
+   *  @tparam B     the element type of the returned collection.
+   *  @tparam That  $thatinfo
+   *  @param bf     $bfinfo
+   *  @return       a new collection of type `That` resulting from applying the given function
+   *                `f` to each element of this $coll and collecting the results.
+   *
+   *  @usecase def map[K2, V2](f: ((K, V)) => (K2, V2)): $Coll[K2, V2]
+   *    @inheritdoc
+   *    @return       a new $coll resulting from applying the given function
+   *                  `f` to each element of this $coll and collecting the results.
+   */
+  def map[B, That](f: ((K, V)) => B)(implicit bf: CanBuildFrom[Repr, B, That]): That
 
   // This hash code must be symmetric in the contents but ought not
   // collide trivially.

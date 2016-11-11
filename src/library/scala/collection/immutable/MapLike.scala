@@ -52,6 +52,23 @@ trait MapLike[K, +V, +This <: MapLike[K, V, This] with Map[K, V]]
 {
 self =>
 
+  // repeated here to override the scaladoc comment
+  /** Builds a new collection by applying a function to all elements of this $coll.
+   *
+   *  @param f      the function to apply to each element.
+   *  @tparam B     the element type of the returned collection.
+   *  @tparam That  $thatinfo
+   *  @param bf     $bfinfo
+   *  @return       a new collection of type `That` resulting from applying the given function
+   *                `f` to each element of this $coll and collecting the results.
+   *
+   *  @usecase def map[K2, V2](f: ((K, V)) => (K2, V2)): $Coll[K2, V2]
+   *    @inheritdoc
+   *    @return       a new $coll resulting from applying the given function
+   *                  `f` to each element of this $coll and collecting the results.
+   */
+  def map[B, That](f: ((K, V)) => B)(implicit bf: CanBuildFrom[This, B, That]): That
+
   protected[this] override def parCombiner = ParMap.newCombiner[K, V]
 
   /** A new immutable map containing updating this map with a given key/value mapping.
