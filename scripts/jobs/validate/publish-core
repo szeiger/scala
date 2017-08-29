@@ -7,6 +7,10 @@
 
 source scripts/common
 
+# Fetch collection-strawman submodule:
+git submodule init
+git submodule update --recursive
+
 generateRepositoriesConfig $prRepoUrl
 SBT="$SBT_CMD -Dsbt.override.build.repos=true -Dsbt.repository.config=$sbtRepositoryConfig"
 
