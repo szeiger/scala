@@ -337,6 +337,7 @@ lazy val library = configureAsSubproject(project)
         "-doc-root-content", (sourceDirectory in Compile).value + "/rootdoc.txt"
       )
     },
+    unmanagedSourceDirectories in Compile += (baseDirectory in ThisBuild).value / "src/old-collections",
     includeFilter in unmanagedResources in Compile := "*.tmpl" | "*.xml" | "*.js" | "*.css" | "rootdoc.txt",
     // Include *.txt files in source JAR:
     mappings in Compile in packageSrc ++= {
