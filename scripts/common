@@ -30,7 +30,7 @@ integrationRepoUrl=${integrationRepoUrl-"https://scala-ci.typesafe.com/artifacto
 
 sbtRepositoryConfig="$WORKSPACE/scripts/sbt-repositories-config"
 
-sbtArgs="-Dsbt.override.build.repos=true -Dsbt.repository.config=$sbtRepositoryConfig $sbtArgs" # allow supplying more args
+sbtArgs="-Dsbt.repository.config=$sbtRepositoryConfig $sbtArgs" # allow supplying more args
 
 
 # temp dir where all 'non-build' operation are performed
@@ -178,12 +178,8 @@ function generateRepositoriesConfig() {
     done
   fi
 
-  if [ "${TRAVIS}" != "true" ]; then
-    jcenterCacheUrl=${jcenterCacheUrl-"https://scala-ci.typesafe.com/artifactory/jcenter/"}
-    echo "jcenter-cache: $jcenterCacheUrl" >> "$sbtRepositoryConfig"
-  fi
-
   cat >> "$sbtRepositoryConfig" << EOF
+  jcenter-cache: $jcenterCacheUrl
   local
   maven-central
   typesafe-ivy-releases-boot: https://repo.lightbend.com/typesafe/ivy-releases/, [organisation]/[module]/[revision]/[type]s/[artifact](-[classifier]).[ext], bootOnly

@@ -8,7 +8,7 @@
 source scripts/common
 
 generateRepositoriesConfig $prRepoUrl
-SBT="$SBT_CMD -Dsbt.override.build.repos=true -Dsbt.repository.config=$sbtRepositoryConfig"
+SBT="$SBT_CMD -Dsbt.repository.config=$sbtRepositoryConfig"
 
 case $prDryRun in
   yep)

@@ -112,8 +112,6 @@ mkFreshIvy() {
 
   rm -rf $WORKSPACE/resolutionScratch_
   mkdir -p $WORKSPACE/resolutionScratch_
-
-  generateRepositoriesConfig $integrationRepoUrl
 }
 
 scalaVerToBinary() {
