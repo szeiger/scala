@@ -615,6 +615,30 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
       else View.Empty
     }
 
+  def collect1[B](pf: PartialFunction[A, B]): CC[B] =
+    flatMap { a =>
+      if (pf.isDefinedAt(a)) new View.Single(pf(a))
+      else View.Empty
+    }
+
+  def collect2[B](pf: PartialFunction[A, B]): CC[B] = flatMap { a =>
+    var matched = true
+    def d(x: A): B = {
+      matched = false
+      null.asInstanceOf[B]
+    }
+    val v = pf.applyOrElse(a, d)
+    if(matched) new View.Single(v)
+    else View.Empty
+  }
+
+  def collect3[B](pf: PartialFunction[A, B]): CC[B] =
+    flatMap { a =>
+      val v = pf.applyOrElse(a, Iterable.checkFallback[B])
+      if (!Iterable.fallbackOccurred(v)) new View.Single(v)
+      else View.Empty
+    }
+
   /** Returns a new $coll containing the elements from the left hand operand followed by the elements from the
     *  right hand operand. The element type of the $coll is the most specific superclass encompassing
     *  the element types of the two operands.
@@ -770,6 +794,10 @@ object IterableOps {
 @SerialVersionUID(3L)
 object Iterable extends IterableFactory.Delegate[Iterable](immutable.Iterable) {
   implicit def toLazyZipOps[A, CC[X] <: Iterable[X]](that: CC[A]): LazyZipOps[A, CC[A]] = new LazyZipOps(that)
+
+  private[this] val fallback_pf: PartialFunction[Any, Any] = { case _ => fallback_pf }
+  private[collection] def checkFallback[B] = fallback_pf.asInstanceOf[PartialFunction[Any, B]]
+  private[collection] def fallbackOccurred[B](x: B) = (fallback_pf eq x.asInstanceOf[AnyRef])
 }
 
 /** Explicit instantiation of the `Iterable` trait to reduce class file size in subclasses. */
