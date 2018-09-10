@@ -37,6 +37,10 @@ import scala.Predef.{ // unimport all array-related implicit conversions to avoi
 
 object ArrayOps {
 
+  private trait ArrayFunction[R] {
+    def apply[@specialized(AnyRef, Int, Double, Long, Float, Char, Byte, Short, Boolean, Unit) T](xs: Array[T]): R
+  }
+
   @SerialVersionUID(3L)
   private class ArrayView[A](xs: Array[A]) extends AbstractIndexedSeqView[A] {
     def length = xs.length
@@ -321,18 +325,22 @@ final class ArrayOps[A](val xs: Array[A]) extends AnyVal {
   def iterator: Iterator[A] = {
     val len = xs.length
     if(len == 0) Iterator.empty
-    else ((xs: Any) match {
-      case xs: Array[AnyRef]  => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Int]     => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Double]  => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Long]    => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Float]   => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Char]    => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Byte]    => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Short]   => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Boolean] => new ArrayOps.ArrayIterator(xs, len)
-      case xs: Array[Unit]    => new ArrayOps.ArrayIterator(xs, len)
-    }).asInstanceOf[Iterator[A]]
+    else dispatch(new ArrayOps.ArrayFunction[AnyRef] { @`inline` def apply[@specialized(AnyRef, Int, Double, Long, Float, Char, Byte, Short, Boolean, Unit) T](xs: Array[T]) = new ArrayOps.ArrayIterator(xs, len) }).asInstanceOf[Iterator[A]]
+  }
+
+  @`inline` private[this] def dispatch[R](f: ArrayOps.ArrayFunction[R]): R = {
+    (xs: Any) match {
+      case xs: Array[AnyRef]  => f(xs)
+      case xs: Array[Int]     => f(xs)
+      case xs: Array[Double]  => f(xs)
+      case xs: Array[Long]    => f(xs)
+      case xs: Array[Float]   => f(xs)
+      case xs: Array[Char]    => f(xs)
+      case xs: Array[Byte]    => f(xs)
+      case xs: Array[Short]   => f(xs)
+      case xs: Array[Boolean] => f(xs)
+      case xs: Array[Unit]    => f(xs)
+    }
   }
 
   /** Partitions elements in fixed size arrays.

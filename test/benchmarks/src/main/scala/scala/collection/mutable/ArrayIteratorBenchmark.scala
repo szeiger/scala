@@ -12,8 +12,8 @@ import org.openjdk.jmh.infra.Blackhole
 class ArrayIteratorBenchmarks {
 
   @Param(Array(
-    "0",
-    "100",
+    //"0",
+    //"100",
     /*"200",
     "300",
     "400",
@@ -22,11 +22,11 @@ class ArrayIteratorBenchmarks {
     "700",
     "800",
     "900",*/
-    "1000",
-    "10000",
-    "100000",
-    "1000000",
-    "10000000",
+    //"1000",
+    //"10000",
+    //"100000",
+    //"1000000",
+    //"10000000",
     "100000000",
   ))
   var valueCount: Int = _
