@@ -488,6 +488,13 @@ trait Definitions extends api.StandardDefinitions {
       lazy val Array_length                = getMemberMethod(ArrayClass, nme.length)
       lazy val Array_clone                 = getMemberMethod(ArrayClass, nme.clone_)
 
+    // source positions
+    lazy val SourceModule           = requiredModule[scala.sys.Source.type]
+      def sourceModule_absFile      = getMemberMethod(SourceModule, nme.absFile)
+      def sourceModule_file         = getMemberMethod(SourceModule, nme.file)
+      def sourceModule_line         = getMemberMethod(SourceModule, nme.line)
+      def sourceModule_column       = getMemberMethod(SourceModule, nme.column)
+
     // reflection / structural types
     lazy val SoftReferenceClass     = requiredClass[java.lang.ref.SoftReference[_]]
     lazy val MethodClass            = getClassByName(sn.MethodAsObject)

@@ -13,7 +13,7 @@
 package scala.tools
 package reflect
 
-import scala.reflect.reify.Taggers
+import scala.reflect.reify.{Taggers, Source}
 import scala.tools.nsc.typechecker.{ Analyzer, Macros }
 import scala.reflect.runtime.Macros.currentMirror
 import scala.reflect.quasiquotes.{ Quasiquotes => QuasiquoteImpls }
@@ -35,6 +35,8 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
 
   private implicit def context2taggers(c0: MacroContext): Taggers { val c: c0.type } =
     new { val c: c0.type = c0 } with Taggers
+  private implicit def context2source(c0: MacroContext): Source { val c: c0.type } =
+    new { val c: c0.type = c0 } with Source
   private implicit def context2macroimplementations(c0: MacroContext): FormatInterpolator { val c: c0.type } =
     new { val c: c0.type = c0 } with FormatInterpolator
   private implicit def context2quasiquote(c0: MacroContext): QuasiquoteImpls { val c: c0.type } =
@@ -65,7 +67,11 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
       makeBlackbox(            StringContext_f) { case _                                          => _.interpolate },
       makeBlackbox(ReflectRuntimeCurrentMirror) { case _                                          => c => currentMirror(c).tree },
       makeWhitebox(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
-      makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
+      makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote },
+      makeBlackbox(          sourceModule_file) { case _                                          => _.materializeFile },
+      makeBlackbox(       sourceModule_absFile) { case _                                          => _.materializeAbsFile },
+      makeBlackbox(          sourceModule_line) { case _                                          => _.materializeLine },
+      makeBlackbox(        sourceModule_column) { case _                                          => _.materializeColumn }
     )
   }
 }
