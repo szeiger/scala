@@ -27,7 +27,7 @@ import scala.reflect.macros.whitebox.Context
  * - The `async` macro declaration itself, and a forwarder for the macro implementation.
  * (The latter is temporarily needed to workaround bug SI-6650 in the macro system)
  *
- * The default implementation, [[scala.async.Async]], binds the macro to `scala.concurrent._`.
+ * The default implementation, [[scala.async]], binds the macro to `scala.concurrent._`.
  */
 abstract class AsyncBase {
   type FS <: FutureSystem

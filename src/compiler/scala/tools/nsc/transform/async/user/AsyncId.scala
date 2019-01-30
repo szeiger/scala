@@ -18,6 +18,14 @@ import scala.reflect.api
 import scala.reflect.internal.SymbolTable
 import scala.reflect.macros.whitebox.Context
 
+// Methods with this annotation are translated to having the RHS wrapped in `AsyncId.async { <original RHS> }`
+@annotation.meta.field
+final class lateasync extends annotation.StaticAnnotation
+
+// Calls to methods with this annotation are translated to `AsyncId.await(<call>)`
+@annotation.meta.getter
+final class autoawait extends annotation.StaticAnnotation
+
 object AsyncId extends AsyncBase {
   lazy val futureSystem = IdentityFutureSystem
   type FS = IdentityFutureSystem.type
