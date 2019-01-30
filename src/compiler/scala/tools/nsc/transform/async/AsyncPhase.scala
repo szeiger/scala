@@ -13,7 +13,6 @@
 package scala.tools.nsc.transform.async
 
 import scala.tools.nsc.Mode
-import scala.tools.nsc.transform.async.user.AsyncBase
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
 abstract class AsyncPhase extends Transform with TypingTransformers  {
@@ -33,19 +32,17 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
 
   private lazy val autoAwaitSym = symbolOf[user.autoawait]
-  private lazy val lateAsyncSym = symbolOf[user.async]
+  private lazy val autoAsyncSym = symbolOf[user.async]
 
   // TODO: support more than the original late expansion tests
+  // TOOD: figure out how to make the root-level async built-in macro sufficiently configurable:
+  //       replace the ExecutionContext implicit arg with an AsyncContext implicit that also specifies the type of the Future/Awaitable/Node/...?
   class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    object asyncTransformerId extends AsyncTransform(user.AsyncId, global) {
+    abstract class AsyncTransformBase(asyncBase: user.AsyncBase) extends AsyncTransform(asyncBase, global) {
       override val u: global.type = global
       import u._
 
       val asyncNames: AsyncNames[u.type] = asyncNames_
-
-      private val asyncIDModule = rootMirror.getRequiredModule("scala.tools.nsc.transform.async.user.AsyncId")
-      val Async_async = definitions.getMember(asyncIDModule, nme.async)
-      val Async_await = definitions.getMember(asyncIDModule, nme.await)
 
       def typecheck(tree: Tree): Tree = localTyper.typed(tree)
       def abort(pos: Position, msg: String): Nothing = {localTyper.context.reporter.error(pos, msg); ???}
@@ -56,22 +53,43 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
           def callsiteTyper = localTyper.asInstanceOf[global.analyzer.Typer]
         }
     }
+    object asyncTransformerId extends AsyncTransformBase(user.AsyncId) {
+      private val asyncIDModule = rootMirror.getRequiredModule("scala.tools.nsc.transform.async.user.AsyncId")
+      val Async_async = definitions.getMember(asyncIDModule, nme.async)
+      val Async_await = definitions.getMember(asyncIDModule, nme.await)
+    }
 
-    def isAutoAwait(fun: Tree) = fun.symbol.hasAnnotation(autoAwaitSym)
+    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentAsync) {
+      val Async_async = currentRun.runDefinitions.Async_async
+      val Async_await = currentRun.runDefinitions.Async_await
+    }
+
     // TODO AM: does this rely on `futureSystem.Fut[T] = T` (as is the case for the identity future system)
     def transformAutoAwait(awaitable: Tree) =
-      localTyper.typedPos(awaitable.pos, Mode.EXPRmode, awaitable.tpe)(Apply(gen.mkAttributedRef(asyncTransformerId.Async_await), awaitable :: Nil))
+      localTyper.typedPos(awaitable.pos, Mode.EXPRmode, awaitable.tpe) {
+        Apply(gen.mkAttributedRef(asyncTransformerId.Async_await), awaitable :: Nil)
+      }
 
-    def isAutoAsync(dd: ValOrDefDef) = dd.symbol.hasAnnotation(lateAsyncSym)
     def transformAutoAsync(rhs: Tree)=
-      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe)(asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe))
+      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe) {
+        asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe)
+      }
+
+    def transformAsyncStd(rhs: Tree, execContext: Tree)= {
+      val pt = rhs.tpe //.baseType(typeOf[scala.concurrent.Future[_]].typeSymbol).typeArgs.head
+      println(s"transformAsyncStd $rhs under $pt")
+      localTyper.typedPos(rhs.pos, Mode.EXPRmode, pt) {
+        asyncTransformerConcurrent.asyncTransform(rhs, execContext, localTyper.context.owner, rhs.pos.makeTransparent)(pt)
+      }
+    }
 
     override def transform(tree: Tree): Tree =
       super.transform(tree) match {
-        case ap@Apply(fun, _) if isAutoAwait(fun) => transformAutoAwait(ap)
-        case dd: DefDef if isAutoAsync(dd)        => atOwner(dd.symbol) {deriveDefDef(dd) {transformAutoAsync } }
-        case vd: ValDef if isAutoAsync(vd)        => atOwner(vd.symbol) {deriveValDef(vd) {transformAutoAsync } }
-        case tree                                 => tree
+        case ap@Apply(fun, _) if fun.symbol.hasAnnotation(autoAwaitSym)               => transformAutoAwait(ap)
+        case ap@Apply(fun, rhs :: execContext :: Nil) if fun.symbol == asyncTransformerConcurrent.Async_async => transformAsyncStd(rhs, execContext)
+        case dd: DefDef if dd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(dd.symbol) { deriveDefDef(dd) { transformAutoAsync } }
+        case vd: ValDef if vd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(vd.symbol) { deriveValDef(vd) { transformAutoAsync } }
+        case tree                                                                     => tree
       }
 
   }

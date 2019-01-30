@@ -149,11 +149,20 @@ object ScalaConcurrentFutureSystem extends FutureSystem {
     override def continueCompletedFutureOnSameThread: Boolean = true
 
     override def getCompleted[A: WeakTypeTag](future: Expr[Fut[A]]): Expr[Tryy[A]] = {
-      val valueGet = reify { future.splice.value.get }
+      val valueGet =
+        if (isPastErasure) {
+          val futVal = reify { future.splice.value }
+          val futValGet = reify {
+            Expr[Option[util.Try[A]]](Apply(futVal.tree, Nil)).splice.get
+          }
+          Expr[Tryy[A]](Apply(futValGet.tree, Nil))
+        }
+        else reify { future.splice.value.get }
+
       val isCompleted = reify { future.splice.isCompleted }
       reify {
         if ({ if (isPastErasure) Expr[Boolean](Apply(isCompleted.tree, Nil)) else isCompleted }.splice)
-          { if (isPastErasure) Expr[Tryy[A]](Apply(valueGet.tree, Nil)) else valueGet }.splice else null
+          valueGet.splice else null
       }
     }
 

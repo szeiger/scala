@@ -16,6 +16,7 @@ import user.AsyncBase
 import scala.reflect.internal.{Flags, SymbolTable}
 import scala.tools.nsc.Global
 
+// This was originally a macro -- TODO: integrate with compiler universe
 abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) extends AnfTransform with AsyncAnalysis with Lifter with LiveVariables {
   import u._
   import typingTransformers.{TypingTransformApi, typingTransform}
