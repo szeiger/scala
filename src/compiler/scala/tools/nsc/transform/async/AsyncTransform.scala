@@ -98,8 +98,8 @@ abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) exte
     }
 
     def startStateMachine: Tree = {
-      val stateMachineSpliced: Tree =
-        spliceMethodBodies(liftedFields, stateMachine, atPos(asyncPos)(asyncBlock.onCompleteHandler(resultTypeTag)), enclosingOwner)
+      val stateMachineSpliced: ClassDef =
+        spliceMethodBodies(liftedFields, stateMachine, atPos(asyncPos)(asyncBlock.onCompleteHandler(resultTypeTag)), apply0DefDef.symbol, applyDefDefDummyBody.symbol, enclosingOwner)
 
       val applyCtor =
         typingTransform(Apply(Select(New(Ident(stateMachine.symbol)), nme.CONSTRUCTOR), Nil))((tree, api) => api.typecheck(tree))
@@ -127,14 +127,28 @@ abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) exte
           }
 
           val explicitOuters = new global.explicitOuter.ExplicitOuterTransformer(typingTransformers.callsiteTyper.context.unit.asInstanceOf[global.CompilationUnit])
-
           val stateMachineWithOuters = explicitOuters.transform(stateMachineSpliced.asInstanceOf[global.Tree])
 
           val newStateMachine = explicitOuters.atOwner(stateMachine.symbol.owner.asInstanceOf[global.Symbol]) {
             explicitOuters.transform(applyCtor.asInstanceOf[global.Tree])
           }
 
-          (stateMachineWithOuters, newStateMachine)
+          val machineWithBridges = stateMachineWithOuters.asInstanceOf[ClassDef] match {
+            case ClassDef(mods, names, tparams, impl@Template(parents, self, stats)) =>
+              val unit = typingTransformers.callsiteTyper.context.unit.asInstanceOf[global.CompilationUnit]
+              val (bridges, toBeRemoved) = new global.erasure.GenerateBridges(unit, stateMachineWithOuters.symbol).generate()
+//              if (bridges.isEmpty) stats
+//              else (stats filterNot (stat => toBeRemoved contains stat.symbol)) ::: bridges
+
+              global.enteringExplicitOuter{println(s"stats: ${stateMachineWithOuters.symbol.info.decls}")}
+              println(s"bridges: $bridges")
+              println("------")
+
+              treeCopy.ClassDef(stateMachineWithOuters, mods, names, tparams,
+                                 treeCopy.Template(impl, parents, self, stats ::: bridges.map { tree => typingTransformers.callsiteTyper.typed(tree.asInstanceOf[typingTransformers.global.Tree]) }))
+          }
+
+          (machineWithBridges, newStateMachine)
         }
 
       def selectStateMachine(selection: TermName) = Select(Ident(name.stateMachine), selection)
@@ -177,7 +191,7 @@ abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) exte
    *  @param  applyBody  tree of onComplete handler (`apply` method)
    *  @return            transformed `ClassDef` tree of the state machine class
    */
-  def spliceMethodBodies(liftables: List[Tree], tree: ClassDef, applyBody: Tree, enclosingOwner: Symbol): Tree = {
+  def spliceMethodBodies(liftables: List[Tree], tree: ClassDef, applyBody: Tree, apply0Sym: Symbol, apply1Sym: Symbol, enclosingOwner: Symbol): ClassDef = {
     val liftedSyms = liftables.map(_.symbol).toSet
     val stateMachineClass = tree.symbol
     liftedSyms.foreach {
@@ -240,10 +254,14 @@ abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) exte
     if (isPastErasure)
       liftablesUseFields.foreach(t => if (t.symbol != null) t.symbol.resetFlag(Flags.LAZY))
 
+    val bridges = Nil
+//      if (isPastErasure) List(apply1BridgeDef(tryAny, apply1Sym), apply0BridgeDef(apply0Sym)).map(dd => typingTransformers.callsiteTyper.typedDefDef(dd.asInstanceOf[typingTransformers.global.DefDef]))
+//      else Nil
+
     val result0 = transformAt(treeSubst) {
       case t@Template(parents, self, stats) =>
         (api: TypingTransformApi) => {
-          treeCopy.Template(t, parents, self, liftablesUseFields ++ stats)
+          treeCopy.Template(t, parents, self, liftablesUseFields ++ stats ++ bridges)
         }
     }
     val result = transformAt(result0) {
@@ -252,6 +270,6 @@ abstract class AsyncTransform(val asyncBase: AsyncBase, val u: SymbolTable) exte
           val typedTree = fixup(dd, applyBody.changeOwner((enclosingOwner, dd.symbol)), api)
           typedTree
     }
-    result
+    result.asInstanceOf[ClassDef]
   }
 }

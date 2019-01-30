@@ -81,8 +81,12 @@ trait PhasedTransform extends AsyncContext {
 
 
   def function0ToUnit = typeOf[() => Unit]
+
   def apply0DefDef: DefDef =
     DefDef(NoMods, name.apply, Nil, emptyParamss, TypeTree(definitions.UnitTpe), Apply(Ident(name.apply), literalNull :: Nil))
+
+  def apply0BridgeDef(orig: Symbol): DefDef =
+    DefDef(NoMods | Flags.BRIDGE, name.apply, Nil, emptyParamss, TypeTree(definitions.ObjectTpe), Apply(Ident(orig), Nil))
 
   def function1ToUnit(argTp: Type, useClass: Boolean) = {
     val fun =
@@ -94,6 +98,11 @@ trait PhasedTransform extends AsyncContext {
   def apply1ToUnitDefDef(argTp: Type): DefDef = {
     val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(argTp), EmptyTree)))
     DefDef(NoMods, name.apply, Nil, applyVParamss, TypeTree(definitions.UnitTpe), literalUnit)
+  }
+
+  def apply1BridgeDef(argTp: Type, orig: Symbol): DefDef = {
+    val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(definitions.ObjectTpe), EmptyTree)))
+    DefDef(NoMods | Flags.BRIDGE, name.apply, Nil, applyVParamss, TypeTree(definitions.ObjectTpe), Apply(Ident(orig), mkAsInstanceOf(Ident(name.tr), argTp) :: Nil))
   }
 
 
