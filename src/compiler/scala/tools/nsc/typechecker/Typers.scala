@@ -4607,8 +4607,8 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
               // The typing in expr1 says expr is Unit (it has already been coerced if
               // it is non-Unit) so we have to retype it.  Fortunately it won't come up much
               // unless the warning is legitimate.
-              if (typed(expr).tpe.typeSymbol != UnitClass)
-                context.warning(tree.pos, "enclosing method " + name + " has result type Unit: return value discarded")
+              if (!isPastTyper && typed(expr).tpe.typeSymbol != UnitClass)
+                context.warning(tree.pos, "enclosing method " + name + s" has result type Unit: return value of type ${expr.tpe} discarded")
             }
             val res = treeCopy.Return(tree, checkDead(context, expr1)).setSymbol(enclMethod.owner)
             val tp = pluginsTypedReturn(NothingTpe, this, res, restpt.tpe)

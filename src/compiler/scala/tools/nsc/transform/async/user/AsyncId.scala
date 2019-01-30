@@ -20,7 +20,7 @@ import scala.reflect.macros.whitebox.Context
 
 // Methods with this annotation are translated to having the RHS wrapped in `AsyncId.async { <original RHS> }`
 @annotation.meta.field
-final class lateasync extends annotation.StaticAnnotation
+final class async extends annotation.StaticAnnotation
 
 // Calls to methods with this annotation are translated to `AsyncId.await(<call>)`
 @annotation.meta.getter

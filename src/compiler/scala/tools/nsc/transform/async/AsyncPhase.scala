@@ -12,6 +12,7 @@
 
 package scala.tools.nsc.transform.async
 
+import scala.tools.nsc.Mode
 import scala.tools.nsc.transform.async.user.AsyncBase
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
@@ -32,13 +33,11 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
 
   private lazy val autoAwaitSym = symbolOf[user.autoawait]
-  private lazy val lateAsyncSym = symbolOf[user.lateasync]
-
-  private val asyncBase: AsyncBase = user.AsyncId
+  private lazy val lateAsyncSym = symbolOf[user.async]
 
   // TODO: support more than the original late expansion tests
   class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    object asyncTransformer extends AsyncTransform(asyncBase, global) {
+    object asyncTransformerId extends AsyncTransform(user.AsyncId, global) {
       override val u: global.type = global
       import u._
 
@@ -60,18 +59,18 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 
     def isAutoAwait(fun: Tree) = fun.symbol.hasAnnotation(autoAwaitSym)
     // TODO AM: does this rely on `futureSystem.Fut[T] = T` (as is the case for the identity future system)
-    def transformAwait(awaitable: Tree) =
-      localTyper.typed(atPos(awaitable.pos)(Apply(gen.mkAttributedRef(asyncTransformer.Async_await), awaitable :: Nil)), pt = awaitable.tpe)
+    def transformAutoAwait(awaitable: Tree) =
+      localTyper.typedPos(awaitable.pos, Mode.EXPRmode, awaitable.tpe)(Apply(gen.mkAttributedRef(asyncTransformerId.Async_await), awaitable :: Nil))
 
-    def isLateAsync(dd: ValOrDefDef) = dd.symbol.hasAnnotation(lateAsyncSym)
-    def transformAsync(rhs: Tree)=
-      localTyper.typed(atPos(rhs.pos)(asyncTransformer.asyncTransform(rhs, asyncTransformer.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe)), pt = rhs.tpe)
+    def isAutoAsync(dd: ValOrDefDef) = dd.symbol.hasAnnotation(lateAsyncSym)
+    def transformAutoAsync(rhs: Tree)=
+      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe)(asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe))
 
     override def transform(tree: Tree): Tree =
       super.transform(tree) match {
-        case ap@Apply(fun, _) if isAutoAwait(fun) => localTyper.typed(transformAwait(ap))
-        case dd: DefDef if isLateAsync(dd)        => atOwner(dd.symbol) { deriveDefDef(dd) { transformAsync } }
-        case vd: ValDef if isLateAsync(vd)        => atOwner(vd.symbol) { deriveValDef(vd) { transformAsync } }
+        case ap@Apply(fun, _) if isAutoAwait(fun) => transformAutoAwait(ap)
+        case dd: DefDef if isAutoAsync(dd)        => atOwner(dd.symbol) {deriveDefDef(dd) {transformAutoAsync } }
+        case vd: ValDef if isAutoAsync(vd)        => atOwner(vd.symbol) {deriveValDef(vd) {transformAutoAsync } }
         case tree                                 => tree
       }
 

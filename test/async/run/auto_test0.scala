@@ -10,14 +10,14 @@
  * additional information regarding copyright ownership.
  */
 
-import scala.tools.nsc.transform.async.user.{lateasync, autoawait}
 
-object Test extends App {
-  @lateasync
-  def test: Any = {
+import scala.tools.nsc.transform.async.user.{async, autoawait}
+
+object Test extends App { assert(test == "foobar")
+  @async
+  def test: String = {
     @autoawait def id(a: String) = a
+
     id("foo") + id("bar")
   }
-
-  println(test)
 }
