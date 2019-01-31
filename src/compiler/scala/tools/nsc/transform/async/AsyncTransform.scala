@@ -38,19 +38,20 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
     // We annotate the type of the whole expression as `T @uncheckedBounds` so as not to introduce
     // warnings about non-conformant LUBs. See SI-7694
     val resultTypeTag = WeakTypeTag(uncheckedBounds(transformType(resultType)))
+    val tryResult = appliedType(weakTypeOf[util.Try[_]], resultType)
 
     val applyDefDefDummyBody: DefDef = {
-      val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(tryAny), EmptyTree)))
+      val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(tryResult), EmptyTree)))
       DefDef(NoMods, name.apply, Nil, applyVParamss, TypeTree(definitions.UnitTpe), literalUnit)
     }
     val apply0DefDef: DefDef =
       DefDef(NoMods, name.apply, Nil, List(Nil), TypeTree(definitions.UnitTpe), Apply(Ident(name.apply), literalNull :: Nil))
 
-    def transformParentTypes(tps: List[Type]) = {
-      val tpsErased = tps.map(transformType)
-      assert(tpsErased.head.typeSymbol.isClass)
-      tpsErased
-    }
+//    def transformParentTypes(tps: List[Type]) = {
+//      val tpsErased = tps.map(transformType)
+//      assert(tpsErased.head.typeSymbol.isClass)
+//      tpsErased
+//    }
 
     // Create `ClassDef` of state machine with empty method bodies for `resume` and `apply`.
     // TODO AM: can we only create the symbol for the state machine class for now and then type check the assembled whole later,
@@ -66,7 +67,7 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
         List(stateVar) ++ resultAndAccessors ++ execContextValDef ++ List(applyDefDefDummyBody, apply0DefDef)
       }
 
-      val customParents = futureSystemOps.stateMachineClassParents map transformType
+      val customParents = futureSystemOps.stateMachineClassParents
       // prefer extending a class to reduce the class file size of the state machine.
       // ... unless a custom future system already extends some class
       val useClass = customParents.forall(_.typeSymbol.asClass.isTrait)
@@ -77,15 +78,15 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
 
       // We extend () => Unit so we can pass this class as the by-name argument to `Future.apply`.
       // See SI-1247 for the the optimization that avoids creation.
-      val funParents = List(appliedType(fun1Class, tryAny, typeOf[Unit]), typeOf[() => Unit])
+      val funParents = List(appliedType(fun1Class, tryResult, typeOf[Unit]), typeOf[() => Unit])
 
       // TODO AM: after erasure we have to change the order of these parents etc
-      val templ = gen.mkTemplate(transformParentTypes(customParents ::: funParents).map(TypeTree(_)), noSelfType, NoMods, List(Nil), body)
+      val templ = gen.mkTemplate((customParents ::: funParents).map(TypeTree(_)), noSelfType, NoMods, List(Nil), body)
 
       // TODO AM: can we skip the type checking and just create a symbol?
       val classSym = enclosingOwner.newClassSymbol(name.stateMachineT, asyncPos, 0)
       val cd = ClassDef(NoMods, name.stateMachineT, Nil, templ).setSymbol(classSym)
-      classSym.setInfo(typingTransformers.callsiteTyper.namer.monoTypeCompleter(cd))
+      enteringExplicitOuter { classSym.setInfo(typingTransformers.callsiteTyper.namer.monoTypeCompleter(cd)) }
       typingTransformers.callsiteTyper.typedClassDef(atPos(asyncPos)(cd)).asInstanceOf[ClassDef]
     }
 
@@ -116,50 +117,32 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
       val stateMachineSpliced: ClassDef =
         spliceMethodBodies(liftedFields, stateMachine, atPos(asyncPos)(asyncBlock.onCompleteHandler(resultTypeTag)), apply0DefDef.symbol, applyDefDefDummyBody.symbol, enclosingOwner)
 
-      val applyCtor =
-        typingTransform(Apply(Select(New(Ident(stateMachine.symbol)), nme.CONSTRUCTOR), Nil))((tree, api) => api.typecheck(tree))
-
-      val (stateMachineUsingOuter, newStateMachine) =
-        if (!isPastErasure) (stateMachineSpliced, applyCtor)
-        else {
+      val (stateMachineUsingOuter, newStateMachine) = {
+          // TODO create state machine class during macro expansion in typers, and only delay actual ANF/Async transform,
+          // happening in the state machine's apply method, to minimize the need for deftree manipulation in later phases
+          //
           // Since explicit outers has already run (it happens before erasure), we must run it ourselves on the class we're synthesizing.
           // The state machine class is going to be lifted out by the flatten phase, but expressions contained in it
           // will likely still need to access the outer class's instance.
           // Thus, we add the standard outer argument to the constructor and supply it when instantiating the state machine.
           // Lambdalift will also look for this and transform appropriately.
 
-          stateMachineSpliced foreach {
-            case dt: DefTree if dt.hasExistingSymbol => // TODO AM: why can't we skip symbols that hasTypeAt(currentRun.explicitouterPhase.id)
-              val sym = dt.symbol
-              val classSym = sym
-              val newInfo = explicitOuter.transformInfo(classSym, classSym.info)
-              // we can't go back to explicit outer phase to retro-actively un-erase our current info and then add explicit outers,
-              // we just have to run the explicitOuter info transform now (during erasure) and hope for the best
-              if (newInfo ne sym.info)
-                classSym.setInfo(newInfo)
-            case _ =>
-          }
-
           val explicitOuters = new explicitOuter.ExplicitOuterTransformer(typingTransformers.callsiteTyper.context.unit)
           val stateMachineWithOuters = explicitOuters.transform(stateMachineSpliced)
-
-          val newStateMachine = explicitOuters.atOwner(stateMachine.symbol.owner) {
-            explicitOuters.transform(applyCtor)
-          }
 
           val machineWithBridges = stateMachineWithOuters.asInstanceOf[ClassDef] match {
             case ClassDef(mods, names, tparams, impl@Template(parents, self, stats)) =>
               val unit = typingTransformers.callsiteTyper.context.unit
-              val (bridges, toBeRemoved) = new erasure.GenerateBridges(unit, stateMachineWithOuters.symbol).generate()
-//              if (bridges.isEmpty) stats
-//              else (stats filterNot (stat => toBeRemoved contains stat.symbol)) ::: bridges
-
-              enteringExplicitOuter{println(s"stats: ${stateMachineWithOuters.symbol.info.decls}")}
-              println(s"bridges: $bridges")
-              println("------")
+              val (bridges, toBeRemoved) =
+                enteringErasure{new erasure.GenerateBridges(unit, stateMachineWithOuters.symbol).generate()}
 
               treeCopy.ClassDef(stateMachineWithOuters, mods, names, tparams,
                                  treeCopy.Template(impl, parents, self, stats ::: bridges.map { tree => typingTransformers.callsiteTyper.typed(tree) }))
+          }
+
+          val applyCtor = enteringExplicitOuter { typingTransformers.callsiteTyper.typed(Apply(Select(New(Ident(stateMachine.symbol)), nme.CONSTRUCTOR), Nil)) }
+          val newStateMachine = explicitOuters.atOwner(stateMachine.symbol.owner) {
+            explicitOuters.transform(applyCtor)
           }
 
           (machineWithBridges, newStateMachine)
@@ -172,7 +155,7 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
       Block(List[Tree](
         stateMachineUsingOuter,
         ValDef(NoMods, name.stateMachine, TypeTree(), newStateMachine),
-        spawn(Apply(selectStateMachine(name.apply), Nil), selectStateMachine(name.execContext))),
+        spawn(Ident(name.stateMachine), selectStateMachine(name.execContext))),
         promiseToFuture(selectStateMachineResult, resultType))
     }
 

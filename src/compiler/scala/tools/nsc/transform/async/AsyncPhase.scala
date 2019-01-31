@@ -76,8 +76,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
       }
 
     def transformAsyncStd(rhs: Tree, execContext: Tree)= {
-      val pt = rhs.tpe //.baseType(typeOf[scala.concurrent.Future[_]].typeSymbol).typeArgs.head
-      println(s"transformAsyncStd $rhs under $pt")
+      val pt = typeOf[scala.concurrent.Future[_]].typeConstructor // no need to apply to rhs.tpe, since we're past erasure
+//      println(s"transformAsyncStd $rhs under $pt")
       localTyper.typedPos(rhs.pos, Mode.EXPRmode, pt) {
         asyncTransformerConcurrent.asyncTransform(rhs, execContext, localTyper.context.owner, rhs.pos.makeTransparent)(pt)
       }
