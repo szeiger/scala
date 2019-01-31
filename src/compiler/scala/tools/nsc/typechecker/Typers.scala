@@ -2319,6 +2319,11 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
+        val rhsAtOwner =
+          ddef.getAndRemoveAttachment[ChangeOwnerAttachment] match {
+            case None => ddef.rhs
+            case Some(ChangeOwnerAttachment(originalOwner)) => ddef.rhs.changeOwner(originalOwner, ddef.symbol)
+          }
         var rhs1 =
           if (ddef.name == nme.CONSTRUCTOR && !ddef.symbol.hasStaticFlag) { // need this to make it possible to generate static ctors
             if (!meth.isPrimaryConstructor &&
@@ -2326,13 +2331,13 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
                 meth.owner.isModuleClass ||
                 meth.owner.isAnonOrRefinementClass))
               InvalidConstructorDefError(ddef)
-            typed(ddef.rhs)
+            typed(rhsAtOwner)
           } else if (meth.isMacro) {
             // typechecking macro bodies is sort of unconventional
             // that's why we employ our custom typing scheme orchestrated outside of the typer
-            transformedOr(ddef.rhs, typedMacroBody(this, ddef))
+            transformedOr(rhsAtOwner, typedMacroBody(this, ddef))
           } else {
-            transformedOrTyped(ddef.rhs, EXPRmode, tpt1.tpe)
+            transformedOrTyped(rhsAtOwner, EXPRmode, tpt1.tpe)
           }
 
         if (meth.isClassConstructor && !isPastTyper && !meth.owner.isSubClass(AnyValClass) && !meth.isJava) {

@@ -21,29 +21,18 @@ import scala.language.existentials
 
 private[async] trait AsyncContext {
   val asyncBase: AsyncBase
-
   val u: Global
-  import u._
-
-  val Async_async: Symbol
-  val Async_await: Symbol
-
-  // macro context interface -- the rest is meant to be independent of our being a macro (planning to move async into the compiler)
-  def abort(pos: Position, msg: String): Nothing
-  def error(pos: Position, msg: String): Unit
-  def typecheck(tree: Tree): Tree
-
-  val asyncNames: AsyncNames[u.type]
-  object name extends asyncNames.AsyncName {
-    def fresh(name: TermName): TermName = freshenIfNeeded(name)
-    def fresh(name: String): String = currentFreshNameCreator.newName(name) // TODO ok? was c.freshName
-  }
 }
 
 // Logic sensitive to where we are in the pipeline
 // (intend to move the transformation as late as possible, to avoid lugging all these trees around)
 trait PhasedTransform extends AsyncContext {
   import u._
+
+  // macro context interface -- the rest is meant to be independent of our being a macro (planning to move async into the compiler)
+  def abort(pos: Position, msg: String): Nothing
+  def error(pos: Position, msg: String): Unit
+  def typecheck(tree: Tree): Tree
 
   // We're not that granular, but keeping separate flag for semantics
   private lazy val isPastUncurry = isPastErasure
@@ -206,12 +195,21 @@ private[async] trait TransformUtils extends PhasedTransform {
   import typingTransformers.{TypingTransformApi, typingTransform}
   import u._
 
+  val asyncNames: AsyncNames[u.type]
+  object name extends asyncNames.AsyncName {
+    def fresh(name: TermName): TermName = freshenIfNeeded(name)
+    def fresh(name: String): String = currentFreshNameCreator.newName(name) // TODO ok? was c.freshName
+  }
+
   def emitTryCatch: Boolean = asyncBase.futureSystem.emitTryCatch
 
   def maybeTry(block: Tree, catches: List[CaseDef], finalizer: Tree) =
     if (emitTryCatch) Try(block, catches, finalizer) else block
 
   lazy val IllegalStateExceptionClass = rootMirror.staticClass("java.lang.IllegalStateException")
+
+  val Async_async: Symbol
+  val Async_await: Symbol
 
   def isAsync(fun: Tree) = fun.symbol == Async_async
   def isAwait(fun: Tree) = fun.symbol == Async_await

@@ -28,6 +28,12 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 //    }).Async_async.exists
 //  }
 
+
+  object macroExpansion extends AsyncEarlyExpansion {
+    val u: global.type = global
+    val asyncBase = user.ScalaConcurrentAsync
+  }
+
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
 
   private lazy val autoAwaitSym = symbolOf[user.autoawait]
@@ -70,25 +76,25 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
         Apply(gen.mkAttributedRef(asyncTransformerId.Async_await), awaitable :: Nil)
       }
 
-    def transformAutoAsync(rhs: Tree)=
-      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe) {
-        asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe)
-      }
-
-    def transformAsyncStd(rhs: Tree, execContext: Tree)= {
-      val pt = typeOf[scala.concurrent.Future[_]].typeConstructor // no need to apply to rhs.tpe, since we're past erasure
-//      println(s"transformAsyncStd $rhs under $pt")
-      localTyper.typedPos(rhs.pos, Mode.EXPRmode, pt) {
-        asyncTransformerConcurrent.asyncTransform(rhs, execContext, localTyper.context.owner, rhs.pos.makeTransparent)(pt)
-      }
-    }
+//    def transformAutoAsync(rhs: Tree)=
+//      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe) {
+//        asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe)
+//      }
+//
+//    def transformAsyncStd(rhs: Tree, execContext: Tree)= {
+//      val pt = typeOf[scala.concurrent.Future[_]].typeConstructor // no need to apply to rhs.tpe, since we're past erasure
+////      println(s"transformAsyncStd $rhs under $pt")
+//      localTyper.typedPos(rhs.pos, Mode.EXPRmode, pt) {
+//        asyncTransformerConcurrent.asyncTransform(rhs, execContext, localTyper.context.owner, rhs.pos.makeTransparent)(pt)
+//      }
+//    }
 
     override def transform(tree: Tree): Tree =
       super.transform(tree) match {
         case ap@Apply(fun, _) if fun.symbol.hasAnnotation(autoAwaitSym)               => transformAutoAwait(ap)
-        case ap@Apply(fun, rhs :: execContext :: Nil) if fun.symbol == asyncTransformerConcurrent.Async_async => transformAsyncStd(rhs, execContext)
-        case dd: DefDef if dd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(dd.symbol) { deriveDefDef(dd) { transformAutoAsync } }
-        case vd: ValDef if vd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(vd.symbol) { deriveValDef(vd) { transformAutoAsync } }
+//        case ap@Apply(fun, rhs :: execContext :: Nil) if fun.symbol == asyncTransformerConcurrent.Async_async => transformAsyncStd(rhs, execContext)
+//        case dd: DefDef if dd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(dd.symbol) { deriveDefDef(dd) { transformAutoAsync } }
+//        case vd: ValDef if vd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(vd.symbol) { deriveValDef(vd) { transformAutoAsync } }
         case tree                                                                     => tree
       }
 

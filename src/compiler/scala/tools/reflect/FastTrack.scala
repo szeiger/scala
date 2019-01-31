@@ -67,7 +67,10 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
       makeWhitebox(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
       makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
      ) ++ (if (!Async_async.exists) Map.empty else Map(
-      makeBlackbox(Async_async) { case app => c => c.global.analyzer.suppressMacroExpansion(app.tree) } // we'll deal with async much later
+      makeBlackbox(Async_async) {
+        // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
+        case Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
+          c => c.global.async.macroExpansion(asyncBody, execContext, resultTp.tpe, c.internal.enclosingOwner) }
      ))
   }
 }
