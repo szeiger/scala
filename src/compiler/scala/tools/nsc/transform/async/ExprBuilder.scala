@@ -37,7 +37,7 @@ trait ExprBuilder extends TransformUtils {
   def Expr[T: WeakTypeTag](tree: Tree): Expr[T] = u.Expr[T](rootMirror, FixedMirrorTreeCreator(rootMirror, tree))
   def WeakTypeTag[T](tpe: Type): WeakTypeTag[T] = u.WeakTypeTag[T](rootMirror, FixedMirrorTypeCreator(rootMirror, tpe))
 
-  lazy val tryAny= transformType(futureSystemOps.tryType(definitions.AnyTpe))
+  lazy val tryAny = transformType(futureSystemOps.tryType(definitions.AnyTpe))
 
   private val stateAssigner  = new StateAssigner
   private val labelDefStates = collection.mutable.Map[Symbol, Int]()

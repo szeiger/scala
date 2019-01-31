@@ -30,18 +30,18 @@ object AsyncId extends AsyncBase {
   lazy val futureSystem = IdentityFutureSystem
   type FS = IdentityFutureSystem.type
 
-  def async[T](body: => T) = macro asyncIdImpl[T]
-
-  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
+//  def async[T](body: => T) = macro asyncIdImpl[T]
+//
+//  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
 }
 
 object AsyncTestLV extends AsyncBase {
   lazy val futureSystem = IdentityFutureSystem
   type FS = IdentityFutureSystem.type
 
-  def async[T](body: T) = macro asyncIdImpl[T]
-
-  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
+//  def async[T](body: T) = macro asyncIdImpl[T]
+//
+//  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
 
   var log: List[(String, Any)] = Nil
   def assertNulledOut(a: Any): Unit = assert(log.exists(_._2 == a), AsyncTestLV.log)

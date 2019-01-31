@@ -17,7 +17,6 @@ import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
 abstract class AsyncPhase extends Transform with TypingTransformers  {
   private val asyncNames_ = new AsyncNames[global.type](global)
-
   import global._
 
   val phaseName: String = "async"
@@ -38,8 +37,9 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
   // TOOD: figure out how to make the root-level async built-in macro sufficiently configurable:
   //       replace the ExecutionContext implicit arg with an AsyncContext implicit that also specifies the type of the Future/Awaitable/Node/...?
   class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
-    abstract class AsyncTransformBase(asyncBase: user.AsyncBase) extends AsyncTransform(asyncBase, global) {
-      override val u: global.type = global
+
+    abstract class AsyncTransformBase(asyncBase: user.AsyncBase) extends AsyncTransform(asyncBase) {
+      val u: global.type = global
       import u._
 
       val asyncNames: AsyncNames[u.type] = asyncNames_
@@ -50,7 +50,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 
       val typingTransformers =
         new TypingTransformers {
-          def callsiteTyper = localTyper.asInstanceOf[global.analyzer.Typer]
+          def callsiteTyper = localTyper
         }
     }
     object asyncTransformerId extends AsyncTransformBase(user.AsyncId) {

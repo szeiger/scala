@@ -22,7 +22,7 @@ import scala.language.existentials
 private[async] trait AsyncContext {
   val asyncBase: AsyncBase
 
-  val u: SymbolTable
+  val u: Global
   import u._
 
   val Async_async: Symbol
@@ -51,8 +51,8 @@ trait PhasedTransform extends AsyncContext {
   protected def applyNilAfterUncurry(t: Tree) = if (isPastUncurry) Apply(t, Nil) else t
 
   lazy val isPastErasure = {
-    val erasurePhase = u.asInstanceOf[Global].currentRun.erasurePhase
-    erasurePhase != NoPhase && u.asInstanceOf[Global].isPast(erasurePhase)
+    val erasurePhase = u.currentRun.erasurePhase
+    erasurePhase != NoPhase && u.isPast(erasurePhase)
   }
 
   def literalNull = Literal(Constant(null))
@@ -79,38 +79,6 @@ trait PhasedTransform extends AsyncContext {
     case _ => false
   }
 
-
-  def function0ToUnit = typeOf[() => Unit]
-
-  def apply0DefDef: DefDef =
-    DefDef(NoMods, name.apply, Nil, emptyParamss, TypeTree(definitions.UnitTpe), Apply(Ident(name.apply), literalNull :: Nil))
-
-  def apply0BridgeDef(orig: Symbol): DefDef =
-    DefDef(NoMods | Flags.BRIDGE, name.apply, Nil, emptyParamss, TypeTree(definitions.ObjectTpe), Apply(Ident(orig), Nil))
-
-  def function1ToUnit(argTp: Type, useClass: Boolean) = {
-    val fun =
-      if (useClass) symbolOf[scala.runtime.AbstractFunction1[Any, Any]]
-      else symbolOf[scala.Function1[Any, Any]]
-
-    appliedType(fun, argTp, typeOf[Unit])
-  }
-  def apply1ToUnitDefDef(argTp: Type): DefDef = {
-    val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(argTp), EmptyTree)))
-    DefDef(NoMods, name.apply, Nil, applyVParamss, TypeTree(definitions.UnitTpe), literalUnit)
-  }
-
-  def apply1BridgeDef(argTp: Type, orig: Symbol): DefDef = {
-    val applyVParamss = List(List(ValDef(Modifiers(Flags.PARAM), name.tr, TypeTree(definitions.ObjectTpe), EmptyTree)))
-    DefDef(NoMods | Flags.BRIDGE, name.apply, Nil, applyVParamss, TypeTree(definitions.ObjectTpe), Apply(Ident(orig), mkAsInstanceOf(Ident(name.tr), argTp) :: Nil))
-  }
-
-
-  def transformParentTypes(tps: List[Type]) = {
-    val tpsErased = tps.map(transformType)
-    assert(tpsErased.head.typeSymbol.isClass)
-    tpsErased
-  }
 
   def transformType(tp: Type) = if (isPastErasure) transformedType(tp) else tp
 
@@ -571,13 +539,12 @@ private[async] trait TransformUtils extends PhasedTransform {
     }
   }
 
-
-  val typingTransformers: TypingTransformers
+  // TODO get rid of all of this and use compiler's facilities directly
+  val typingTransformers: TypingTransformers { val global: u.type }
 
   abstract class TypingTransformers extends scala.tools.nsc.transform.TypingTransformers {
-    val global: u.type with Global = u.asInstanceOf[u.type with Global]
-
-    def callsiteTyper: global.analyzer.Typer
+    val global: u.type = u
+    def callsiteTyper: analyzer.Typer
 
     trait TransformApi {
       /** Calls the current transformer on the given tree.
@@ -621,37 +588,37 @@ private[async] trait TransformUtils extends PhasedTransform {
         def default(tree: Tree): Tree = superTransform(tree)
       }
       def superTransform(tree: Tree) = super.transform(tree)
-      override def transform(tree: Tree): Tree = hof(tree, api).asInstanceOf[global.Tree]
+      override def transform(tree: Tree): Tree = hof(tree, api)
     }
 
     //    def transform(tree: Tree)(transformer: (Tree, TransformApi) => Tree): Tree = new HofTransformer(transformer).transform(tree)
 
     class HofTypingTransformer(hof: (Tree, TypingTransformApi) => Tree) extends TypingTransformer(callsiteTyper.context.unit) { self =>
       currentOwner = callsiteTyper.context.owner
-      curTree = global.EmptyTree
+      curTree = EmptyTree
 
       localTyper = {
-        val ctx: global.analyzer.Context = callsiteTyper.context.make(unit = callsiteTyper.context.unit)
-        (if (phase.erasedTypes) global.erasure.newTyper(ctx.asInstanceOf[global.erasure.Context]) else global.analyzer.newTyper(ctx)).asInstanceOf[global.analyzer.Typer]
+        val ctx: analyzer.Context = callsiteTyper.context.make(unit = callsiteTyper.context.unit)
+        if (phase.erasedTypes) erasure.newTyper(ctx.asInstanceOf[erasure.Context]).asInstanceOf[analyzer.Typer] else analyzer.newTyper(ctx)
       }
 
       val api = new TypingTransformApi {
         def recur(tree: Tree): Tree = hof(tree, this)
         def default(tree: Tree): Tree = superTransform(tree)
-        def atOwner[T](owner: Symbol)(op: => T): T = self.atOwner(owner.asInstanceOf[global.Symbol])(op)
-        def atOwner[T](tree: Tree, owner: Symbol)(op: => T): T = self.atOwner(tree.asInstanceOf[global.Tree], owner.asInstanceOf[global.Symbol])(op)
+        def atOwner[T](owner: Symbol)(op: => T): T = self.atOwner(owner)(op)
+        def atOwner[T](tree: Tree, owner: Symbol)(op: => T): T = self.atOwner(tree, owner)(op)
         def currentOwner: Symbol = self.currentOwner
-        def typecheck(tree: Tree): Tree = localTyper.typed(tree.asInstanceOf[global.Tree])
+        def typecheck(tree: Tree): Tree = localTyper.typed(tree)
       }
-      def superTransform(tree: Tree) = super.transform(tree.asInstanceOf[global.Tree])
-      override def transform(tree: global.Tree): global.Tree = hof(tree, api).asInstanceOf[global.Tree]
+      def superTransform(tree: Tree) = super.transform(tree)
+      override def transform(tree: Tree): Tree = hof(tree, api)
     }
 
-    def typingTransform(tree: Tree)(transformer: (Tree, TypingTransformApi) => Tree): Tree = new HofTypingTransformer(transformer).transform(tree.asInstanceOf[global.Tree])
+    def typingTransform(tree: Tree)(transformer: (Tree, TypingTransformApi) => Tree): Tree = new HofTypingTransformer(transformer).transform(tree)
 
     def typingTransform(tree: Tree, owner: Symbol)(transformer: (Tree, TypingTransformApi) => Tree): Tree = {
       val trans = new HofTypingTransformer(transformer)
-      trans.atOwner(owner.asInstanceOf[global.Symbol])(trans.transform(tree.asInstanceOf[global.Tree]))
+      trans.atOwner(owner)(trans.transform(tree))
     }
   }
 
