@@ -112,31 +112,29 @@ abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform wit
     cleanupContainsAwaitAttachments(anfTree)
     markContainsAwait(anfTree)
 
-    val asyncBlock: AsyncBlock = buildAsyncBlock(anfTree, SymLookup(stateMachineClass, trParamSym))
+    val asyncBlock = buildAsyncBlock(anfTree, SymLookup(stateMachineClass, trParamSym))
 
-    val liftedFields: List[Tree] = liftables(asyncBlock.asyncStates)
-
-    // live variables analysis
-    // the result map indicates in which states a given field should be nulled out
-    val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
-
-    for ((state, flds) <- assignsOf) {
-      val assigns = flds.map { fld =>
-        val fieldSym = fld.symbol
-        val assign = Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), mkZero(fieldSym.info, asyncPos))
-        val nulled = nullOut(fieldSym)
-        if (isLiteralUnit(nulled)) assign
-        else Block(nulled :: Nil, assign)
-      }
-      val asyncState = asyncBlock.asyncStates.find(_.state == state).get
-      asyncState.stats = assigns ++ asyncState.stats
-    }
-
-
-    val isSimple = asyncBlock.asyncStates.size == 1
     // generate lean code for the simple case of `async { 1 + 1 }`
-    if (isSimple) Left(spawn(body, Select(Ident(nme.stateMachine), nme.execContext)))
+    if (asyncBlock.asyncStates.lengthCompare(1) == 0) Left(spawn(body, Select(Ident(nme.stateMachine), nme.execContext)))
     else {
+      val liftedFields: List[Tree] = liftables(asyncBlock.asyncStates)
+
+      // live variables analysis
+      // the result map indicates in which states a given field should be nulled out
+      val assignsOf = fieldsToNullOut(asyncBlock.asyncStates, liftedFields)
+
+      for ((state, flds) <- assignsOf) {
+        val assigns = flds.map { fld =>
+          val fieldSym = fld.symbol
+          val assign = Assign(gen.mkAttributedStableRef(thisType(fieldSym.owner), fieldSym), mkZero(fieldSym.info, asyncPos))
+          val nulled = nullOut(fieldSym)
+          if (isLiteralUnit(nulled)) assign
+          else Block(nulled :: Nil, assign)
+        }
+        val asyncState = asyncBlock.asyncStates.find(_.state == state).get
+        asyncState.stats = assigns ++ asyncState.stats
+      }
+
       val liftedSyms = liftedFields.map(_.symbol).toSet
       liftedSyms.foreach { sym =>
         if (sym != null) {

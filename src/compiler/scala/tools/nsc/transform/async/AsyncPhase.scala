@@ -29,9 +29,19 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 //  }
 
 
+
   object macroExpansion extends AsyncEarlyExpansion {
     val u: global.type = global
     val asyncBase = user.ScalaConcurrentAsync
+    import treeInfo.Applied
+
+    def fastTrackEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: u.type } => Tree]) =
+      (currentRun.runDefinitions.Async_async, {
+        // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
+        case app@Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
+          c => c.global.async.macroExpansion(c.global.analyzer.suppressMacroExpansion(app.tree), execContext, resultTp.tpe, c.internal.enclosingOwner)
+      })
+
   }
 
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
