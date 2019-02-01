@@ -90,22 +90,45 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 //      localTyper.typedPos(rhs.pos, Mode.EXPRmode, rhs.tpe) {
 //        asyncTransformerId.asyncTransform(rhs, asyncTransformerId.literalUnit, localTyper.context.owner, rhs.pos.makeTransparent)(rhs.tpe)
 //      }
-//
-//    def transformAsyncStd(rhs: Tree, execContext: Tree)= {
-//      val pt = typeOf[scala.concurrent.Future[_]].typeConstructor // no need to apply to rhs.tpe, since we're past erasure
-////      println(s"transformAsyncStd $rhs under $pt")
-//      localTyper.typedPos(rhs.pos, Mode.EXPRmode, pt) {
-//        asyncTransformerConcurrent.asyncTransform(rhs, execContext, localTyper.context.owner, rhs.pos.makeTransparent)(pt)
-//      }
-//    }
+
+    lazy val uncurrier = new uncurry.UnCurryTransformer(unit)
 
     override def transform(tree: Tree): Tree =
-      super.transform(tree) match {
+      tree match {
+        // {
+        //    class stateMachine$async extends scala.runtime.AbstractFunction1 with Function0$mcV$sp {
+        //      def apply(tr$async: scala.util.Try): Unit = { // symbol of this def is `applySym`, symbol of its param named "tr$async" is `trParamSym`
+        //      ...
+        //    }
+        //    val stateMachine = ...
+        //    ...
+        // }
+        case Block((cd@ClassDef(mods, tpnme.stateMachine, _, impl@Template(parents, self, stats))) :: (vd@ValDef(_, nme.stateMachine, tpt, _)) :: rest, expr) if tpt.tpe.typeSymbol == cd.symbol =>
+          import asyncTransformerConcurrent._
+
+          stats.collectFirst {
+            case dd@DefDef(mods, name@nme.apply, tparams, vparamss@List(tr :: Nil), tpt, Block( Apply(asyncMacro, List(asyncBody, execContext)) :: Nil, Literal(Constant(())))) =>
+              asyncTransform(asyncBody, dd.symbol, tr.symbol, execContext) match {
+                case Some((newRhs, liftables)) =>
+                  Right(treeCopy.DefDef(dd, mods, name, tparams, vparamss, tpt, newRhs).setType(null) /* need to retype */ :: liftables)
+                case None =>
+                  val thunkFun = localTyper.typedPos(asyncBody.pos)(Function(Nil, asyncBody)).asInstanceOf[Function]
+                  thunkFun.body.changeOwner(dd.symbol, thunkFun.symbol)
+                  thunkFun.setType(definitions.functionType(Nil, exitingTyper { futureSystemOps.tryTypeToResult(tr.symbol.info) })) // ugh (uncurry normally runs before erasure and wants a full function type)
+                  Left(futureSystemOps.future(uncurrier.transformFunction(thunkFun), execContext))
+              }
+          } match {
+            case Some(Left(simple)) => localTyper.typed(simple)
+            case Some(Right(newStats@(newApply :: liftables))) =>
+              val newTempl = treeCopy.Template(impl, parents, self, stats.filterNot(_.symbol == newApply.symbol) ::: newStats)
+              treeCopy.Block(tree, localTyper.typedClassDef(treeCopy.ClassDef(cd, mods, tpnme.stateMachine, Nil, newTempl)) :: vd :: rest, expr)
+          }
         case ap@Apply(fun, _) if fun.symbol.hasAnnotation(autoAwaitSym)               => transformAutoAwait(ap)
 //        case ap@Apply(fun, rhs :: execContext :: Nil) if fun.symbol == asyncTransformerConcurrent.Async_async => transformAsyncStd(rhs, execContext)
 //        case dd: DefDef if dd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(dd.symbol) { deriveDefDef(dd) { transformAutoAsync } }
 //        case vd: ValDef if vd.symbol.hasAnnotation(autoAsyncSym)                      => atOwner(vd.symbol) { deriveValDef(vd) { transformAutoAsync } }
-        case tree                                                                     => tree
+        case tree                                                                     =>
+          super.transform(tree)
       }
 
   }

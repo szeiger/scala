@@ -28,12 +28,6 @@ trait ExprBuilder extends TransformUtils {
   def nullOut(fieldSym: Symbol): Tree =
     asyncBase.nullOut(u)(Expr[String](Literal(Constant(fieldSym.name.toString))), Expr[Any](Ident(fieldSym))).tree
 
-  def spawn(tree: Tree, execContext: Tree): Tree =
-    futureSystemOps.future(Expr[Unit](tree))(Expr[futureSystem.ExecContext](execContext)).tree
-
-  def promiseToFuture(prom: Tree, resTp: Type): Tree =
-    futureSystemOps.promiseToFuture(Expr[Nothing](prom))(WeakTypeTag(resTp)).tree
-
   def Expr[T: WeakTypeTag](tree: Tree): Expr[T] = u.Expr[T](rootMirror, FixedMirrorTreeCreator(rootMirror, tree))
   def WeakTypeTag[T](tpe: Type): WeakTypeTag[T] = u.WeakTypeTag[T](rootMirror, FixedMirrorTypeCreator(rootMirror, tpe))
 

@@ -69,31 +69,24 @@ object IdentityFutureSystem extends FutureSystem {
   type ExecContext = Unit
   type Tryy[A] = scala.util.Try[A]
 
+
   def mkOps(u: SymbolTable, isPastErasure: Boolean = false): Ops[u.type] = new IdentityOps[u.type](u, isPastErasure)
   class IdentityOps[Universe <: SymbolTable](u0: Universe, isPastErasure: Boolean) extends Ops[Universe](u0, isPastErasure) {
     import u._
 
-    def promType(tp: Type): Type = appliedType(weakTypeOf[Box[_]], tp)
-    def tryType(tp: Type): Type = appliedType(weakTypeOf[util.Try[_]], tp)
+    lazy val TryClass = rootMirror.requiredClass[scala.util.Try[_]]
+    lazy val Box      = rootMirror.requiredClass[scala.tools.nsc.transform.async.user.Box[_]]
 
-    def createProm[A: WeakTypeTag]: Expr[Prom[A]] = {
-      val newProm = reify { new Prom[A]() }
-      if (isPastErasure)
-        Expr[Prom[A]](newProm.tree match {
-          // drop type apply
-          case ap@Apply(sel@Select(nw@New(AppliedTypeTree(newProm, _)), ctor), args) =>
-            treeCopy.Apply(ap, treeCopy.Select(sel, treeCopy.New(nw, newProm), ctor), args)
-        })
-      else newProm
-    }
+    def promType(tp: Type): Type = appliedType(Box, tp)
+    def tryType(tp: Type): Type = appliedType(TryClass, tp)
+    def tryTypeToResult(tp: Type): Type = tp.baseType(TryClass).typeArgs.headOption.getOrElse(NoType)
 
-    def promiseToFuture[A: WeakTypeTag](prom: Expr[Prom[A]]) = {
-      val expr = reify { prom.splice.a }
-      if (isPastErasure) Expr[Fut[A]](Apply(expr.tree, Nil))
-      else expr
-    }
+    def createProm(resultType: Type): Tree = Apply(Select(New(TypeTree(promType(resultType))), nme.CONSTRUCTOR), Nil)
 
-    def future[A: WeakTypeTag](t: Expr[A])(execContext: Expr[ExecContext]) = t
+    // called during typer
+    def promiseToFuture(prom: Tree) = Select(prom, newTermName("a"))
+
+    def future(a: Tree, execContext: Tree): Tree = a
 
     def onComplete[A, B](future: Expr[Fut[A]], fun: Expr[Tryy[A] => B],
                          execContext: Expr[ExecContext]): Expr[Unit] = reify {
