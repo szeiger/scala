@@ -183,6 +183,7 @@ lazy val commonSettings = clearSourceAndResourceDirectories ++ publishSettings +
     // END: Copy/pasted from SBT
   },
   fork in run := true,
+  connectInput in run := true,
   scalacOptions in Compile in doc ++= Seq(
     "-doc-footer", "epfl",
     "-diagrams",
