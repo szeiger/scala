@@ -151,6 +151,8 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     */
   protected type IterableCC[X] = CC[X] @uncheckedVariance
 
+  protected type IterableC = C @uncheckedVariance
+
   /**
     * @return This collection as an `Iterable[A]`. No new collection will be built if `this` is already an `Iterable[A]`.
     */

@@ -51,6 +51,87 @@ trait Seq[+A]
 
   @deprecatedOverriding("Compatibility override", since="2.13.0")
   override protected[this] def stringPrefix: String = "Seq"
+
+  /** Sorts this $coll according to an Ordering.
+    *
+    *  The sort is stable. That is, elements that are equal (as determined by
+    *  `ord.compare`) appear in the same order in the sorted sequence as in the original.
+    *
+    *  @see [[scala.math.Ordering]]
+    *
+    *  $willForceEvaluation
+    *
+    *  @param  ord the ordering to be used to compare elements.
+    *  @return     a $coll consisting of the elements of this $coll
+    *              sorted according to the ordering `ord`.
+    */
+  def sorted[B >: A](implicit ord: Ordering[B]): IterableC = {
+    val len = this.length
+    val b = newSpecificBuilder
+    if (len == 1) b ++= toIterable
+    else if (len > 1) {
+      b.sizeHint(len)
+      val arr = new Array[AnyRef](len)  // Previously used ArraySeq for more compact but slower code
+      var i = 0
+      for (x <- this) {
+        arr(i) = x.asInstanceOf[AnyRef]
+        i += 1
+      }
+      java.util.Arrays.sort(arr, ord.asInstanceOf[Ordering[Object]])
+      i = 0
+      while (i < arr.length) {
+        b += arr(i).asInstanceOf[A]
+        i += 1
+      }
+    }
+    b.result()
+  }
+
+  /** Sorts this $coll according to a comparison function.
+    *  $willNotTerminateInf
+    *  $willForceEvaluation
+    *
+    *  The sort is stable. That is, elements that are equal (as determined by
+    *  `lt`) appear in the same order in the sorted sequence as in the original.
+    *
+    *  @param  lt  the comparison function which tests whether
+    *              its first argument precedes its second argument in
+    *              the desired ordering.
+    *  @return     a $coll consisting of the elements of this $coll
+    *              sorted according to the comparison function `lt`.
+    *  @example {{{
+    *    List("Steve", "Tom", "John", "Bob").sortWith(_.compareTo(_) < 0) =
+    *    List("Bob", "John", "Steve", "Tom")
+    *  }}}
+    */
+  def sortWith(lt: (A, A) => Boolean): IterableC = sorted(Ordering.fromLessThan(lt))
+
+  /** Sorts this $coll according to the Ordering which results from transforming
+    * an implicitly given Ordering with a transformation function.
+    * $willNotTerminateInf
+    * $willForceEvaluation
+    *
+    * The sort is stable. That is, elements that are equal (as determined by
+    * `ord.compare`) appear in the same order in the sorted sequence as in the original.
+    *
+    *  @see [[scala.math.Ordering]]
+    *  @param   f the transformation function mapping elements
+    *           to some other domain `B`.
+    *  @param   ord the ordering assumed on domain `B`.
+    *  @tparam  B the target type of the transformation `f`, and the type where
+    *           the ordering `ord` is defined.
+    *  @return  a $coll consisting of the elements of this $coll
+    *           sorted according to the ordering where `x < y` if
+    *           `ord.lt(f(x), f(y))`.
+    *
+    *  @example {{{
+    *    val words = "The quick brown fox jumped over the lazy dog".split(' ')
+    *    // this works because scala.Ordering will implicitly provide an Ordering[Tuple2[Int, Char]]
+    *    words.sortBy(x => (x.length, x.head))
+    *    res0: Array[String] = Array(The, dog, fox, the, lazy, over, brown, quick, jumped)
+    *  }}}
+    */
+  def sortBy[B](f: A => B)(implicit ord: Ordering[B]): IterableC = sorted(ord on f)
 }
 
 /**
@@ -677,87 +758,6 @@ trait SeqOps[+A, +CC[_], +C] extends Any
       (es.to(IndexedSeq), cs, ns)
     }
   }
-
-  /** Sorts this $coll according to an Ordering.
-    *
-    *  The sort is stable. That is, elements that are equal (as determined by
-    *  `ord.compare`) appear in the same order in the sorted sequence as in the original.
-    *
-    *  @see [[scala.math.Ordering]]
-    *
-    *  $willForceEvaluation
-    *
-    *  @param  ord the ordering to be used to compare elements.
-    *  @return     a $coll consisting of the elements of this $coll
-    *              sorted according to the ordering `ord`.
-    */
-  def sorted[B >: A](implicit ord: Ordering[B]): C = {
-    val len = this.length
-    val b = newSpecificBuilder
-    if (len == 1) b ++= toIterable
-    else if (len > 1) {
-      b.sizeHint(len)
-      val arr = new Array[AnyRef](len)  // Previously used ArraySeq for more compact but slower code
-      var i = 0
-      for (x <- this) {
-        arr(i) = x.asInstanceOf[AnyRef]
-        i += 1
-      }
-      java.util.Arrays.sort(arr, ord.asInstanceOf[Ordering[Object]])
-      i = 0
-      while (i < arr.length) {
-        b += arr(i).asInstanceOf[A]
-        i += 1
-      }
-    }
-    b.result()
-  }
-
-  /** Sorts this $coll according to a comparison function.
-    *  $willNotTerminateInf
-    *  $willForceEvaluation
-    *
-    *  The sort is stable. That is, elements that are equal (as determined by
-    *  `lt`) appear in the same order in the sorted sequence as in the original.
-    *
-    *  @param  lt  the comparison function which tests whether
-    *              its first argument precedes its second argument in
-    *              the desired ordering.
-    *  @return     a $coll consisting of the elements of this $coll
-    *              sorted according to the comparison function `lt`.
-    *  @example {{{
-    *    List("Steve", "Tom", "John", "Bob").sortWith(_.compareTo(_) < 0) =
-    *    List("Bob", "John", "Steve", "Tom")
-    *  }}}
-    */
-  def sortWith(lt: (A, A) => Boolean): C = sorted(Ordering.fromLessThan(lt))
-
-  /** Sorts this $coll according to the Ordering which results from transforming
-    * an implicitly given Ordering with a transformation function.
-    * $willNotTerminateInf
-    * $willForceEvaluation
-    *
-    * The sort is stable. That is, elements that are equal (as determined by
-    * `ord.compare`) appear in the same order in the sorted sequence as in the original.
-    *
-    *  @see [[scala.math.Ordering]]
-    *  @param   f the transformation function mapping elements
-    *           to some other domain `B`.
-    *  @param   ord the ordering assumed on domain `B`.
-    *  @tparam  B the target type of the transformation `f`, and the type where
-    *           the ordering `ord` is defined.
-    *  @return  a $coll consisting of the elements of this $coll
-    *           sorted according to the ordering where `x < y` if
-    *           `ord.lt(f(x), f(y))`.
-    *
-    *  @example {{{
-    *    val words = "The quick brown fox jumped over the lazy dog".split(' ')
-    *    // this works because scala.Ordering will implicitly provide an Ordering[Tuple2[Int, Char]]
-    *    words.sortBy(x => (x.length, x.head))
-    *    res0: Array[String] = Array(The, dog, fox, the, lazy, over, brown, quick, jumped)
-    *  }}}
-    */
-  def sortBy[B](f: A => B)(implicit ord: Ordering[B]): C = sorted(ord on f)
 
   /** Produces the range of all indices of this sequence.
     * $willForceEvaluation
