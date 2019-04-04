@@ -33,7 +33,7 @@ trait SortedMap[K, +V]
 
 trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _], +C <: SortedMapOps[K, V, CC, C]]
   extends MapOps[K, V, Map, C]
-     with SortedOps[K, C] {
+     with SortedOps[K, C] { self =>
 
   /** The companion object of this sorted map, providing various factory methods.
     *
@@ -174,32 +174,34 @@ trait SortedMapOps[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _],
   @deprecated("Use ++ with an explicit collection argument instead of + with varargs", "2.13.0")
   override def + [V1 >: V](elem1: (K, V1), elem2: (K, V1), elems: (K, V1)*): CC[K, V1] = sortedMapFactory.from(new View.Concat(new View.Appended(new View.Appended(toIterable, elem1), elem2), elems))
 
+  override def withFilter(pred: ((K, V)) => Boolean): SortedMapOps.WithFilter[K, V, CC, C] =
+    new SortedMapOps.WithFilter[K, V, CC, C] { def coll = self; def p = pred }
+
   // TODO Also override mapValues
 }
 
 object SortedMapOps {
   private[collection] final val ordMsg = "No implicit Ordering[${K2}] found to build a SortedMap[${K2}, ${V2}]. You may want to upcast to a Map[${K}, ${V}] first by calling `unsorted`."
 
-  /** Specializes `MapWithFilter` for sorted Map collections
+  /** Specializes `MapOps.WithFilter` for sorted Map collections
     *
     * @define coll sorted map collection
     */
-  class WithFilter[K, +V, +IterableCC[_], +MapCC[X, Y] <: Map[X, Y], +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _]](
-    self: SortedMapOps[K, V, CC, _] with MapOps[K, V, MapCC, _] with IterableOps[(K, V), IterableCC, _],
-    p: ((K, V)) => Boolean
-  ) extends MapOps.WithFilter[K, V, IterableCC, MapCC](self, p) {
+  @SerialVersionUID(3L)
+  trait WithFilter[K, +V, +CC[X, Y] <: Map[X, Y] with SortedMapOps[X, Y, CC, _], +C <: SortedMapOps[K, V, CC, C]] extends MapOps.WithFilter[K, V, Map] { self =>
+    protected[this] def coll: SortedMapOps[K, V, CC, C]
 
     def map[K2 : Ordering, V2](f: ((K, V)) => (K2, V2)): CC[K2, V2] =
-      self.sortedMapFactory.from(new View.Map(filtered, f))
+      coll.sortedMapFactory.from(new View.Map(filtered, f))
 
     def flatMap[K2 : Ordering, V2](f: ((K, V)) => IterableOnce[(K2, V2)]): CC[K2, V2] =
-      self.sortedMapFactory.from(new View.FlatMap(filtered, f))
+      coll.sortedMapFactory.from(new View.FlatMap(filtered, f))
 
-    override def withFilter(q: ((K, V)) => Boolean): WithFilter[K, V, IterableCC, MapCC, CC] =
-      new WithFilter[K, V, IterableCC, MapCC, CC](self, (kv: (K, V)) => p(kv) && q(kv))
-
+    override def withFilter(q: ((K, V)) => Boolean): WithFilter[K, V, CC, C] = new WithFilter[K, V, CC, C] {
+      def coll = self.coll
+      val p = (a: (K, V)) => self.p(a) && q(a)
+    }
   }
-
 }
 
 @SerialVersionUID(3L)

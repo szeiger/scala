@@ -74,7 +74,7 @@ trait Map[K, +V]
 // erase CC to IterableOps instead of Object
 trait MapOps[K, +V, +CC[_, _] <: IterableOps[_, AnyConstr, _], +C]
   extends IterableOps[(K, V), Iterable, C]
-    with PartialFunction[K, V] {
+    with PartialFunction[K, V] { self =>
 
   override def view: MapView[K, V] = new MapView.Id(this)
 
@@ -332,31 +332,32 @@ trait MapOps[K, +V, +CC[_, _] <: IterableOps[_, AnyConstr, _], +C]
     }
     mapFactory.from(new View.Concat(toIterable, thatIterable))
   }
+
+  override def withFilter(pred: ((K, V)) => Boolean): MapOps.WithFilter[K, V, CC] =
+    new MapOps.WithFilter[K, V, CC] { def coll = self; def p = pred }
 }
 
 object MapOps {
-  /** Specializes `WithFilter` for Map collection types by adding overloads to transformation
+  /** Specializes `IterableOps.WithFilter` for Map collection types by adding overloads to transformation
     * operations that can return a Map.
     *
     * @define coll map collection
     */
   @SerialVersionUID(3L)
-  class WithFilter[K, +V, +IterableCC[_], +CC[_, _] <: IterableOps[_, AnyConstr, _]](
-    self: MapOps[K, V, CC, _] with IterableOps[(K, V), IterableCC, _],
-    p: ((K, V)) => Boolean
-  ) extends IterableOps.WithFilter[(K, V), IterableCC](self, p) with Serializable {
+  trait WithFilter[K, +V, +CC[_, _] <: IterableOps[_, AnyConstr, _]] extends IterableOps.WithFilter[(K, V), Iterable] { self =>
+    protected[this] def coll: MapOps[K, V, CC, _] with IterableOps[(K, V), Iterable, _]
 
     def map[K2, V2](f: ((K, V)) => (K2, V2)): CC[K2, V2] =
-      self.mapFactory.from(new View.Map(filtered, f))
+      coll.mapFactory.from(new View.Map(filtered, f))
 
     def flatMap[K2, V2](f: ((K, V)) => IterableOnce[(K2, V2)]): CC[K2, V2] =
-      self.mapFactory.from(new View.FlatMap(filtered, f))
+      coll.mapFactory.from(new View.FlatMap(filtered, f))
 
-    override def withFilter(q: ((K, V)) => Boolean): WithFilter[K, V, IterableCC, CC] =
-      new WithFilter[K, V, IterableCC, CC](self, (kv: (K, V)) => p(kv) && q(kv))
-
+    override def withFilter(q: ((K, V)) => Boolean): WithFilter[K, V, CC] = new WithFilter[K, V, CC] {
+      def coll = self.coll
+      val p = (a: (K, V)) => self.p(a) && q(a)
+    }
   }
-
 }
 
 /**

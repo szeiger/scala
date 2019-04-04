@@ -158,7 +158,7 @@ sealed abstract class Stream[+A] extends AbstractSeq[A]
   }
 
   /** A `collection.WithFilter` which allows GC of the head of stream during processing */
-  override final def withFilter(p: A => Boolean): collection.WithFilter[A, Stream] =
+  override final def withFilter(p: A => Boolean): IterableOps.WithFilter[A, Stream] =
     Stream.withFilter(coll, p)
 
   override final def prepended[B >: A](elem: B): Stream[B] = cons(elem, coll)
@@ -460,16 +460,14 @@ object Stream extends SeqFactory[Stream] {
 
   override def newBuilder[A]: mutable.Builder[A, Stream[A]] = ArrayBuffer.newBuilder[A].mapResult(array => from(array))
 
-  private[immutable] def withFilter[A](l: Stream[A] @uncheckedVariance, p: A => Boolean): collection.WithFilter[A, Stream] =
+  private[immutable] def withFilter[A](l: Stream[A] @uncheckedVariance, p: A => Boolean): IterableOps.WithFilter[A, Stream] =
     new WithFilter[A](l, p)
 
-  private[this] final class WithFilter[A](l: Stream[A] @uncheckedVariance, p: A => Boolean) extends collection.WithFilter[A, Stream] {
-    private[this] var s = l                                                // set to null to allow GC after filtered
-    private[this] lazy val filtered: Stream[A] = { val f = s.filter(p); s = null.asInstanceOf[Stream[A]]; f } // don't set to null if throw during filter
-    def map[B](f: A => B): Stream[B] = filtered.map(f)
-    def flatMap[B](f: A => IterableOnce[B]): Stream[B] = filtered.flatMap(f)
-    def foreach[U](f: A => U): Unit = filtered.foreach(f)
-    def withFilter(q: A => Boolean): collection.WithFilter[A, Stream] = new WithFilter(filtered, q)
+  private[this] final class WithFilter[A](protected[this] var coll: Stream[A] @uncheckedVariance, protected[this] val p: A => Boolean) extends IterableOps.WithFilter[A, Stream] {
+    private[this] lazy val filtered: Stream[A] = { val f = coll.filter(p); coll = null.asInstanceOf[Stream[A]]; f } // don't set to null if throw during filter
+    override def map[B](f: A => B): Stream[B] = filtered.map(f)
+    override def flatMap[B](f: A => IterableOnce[B]): Stream[B] = filtered.flatMap(f)
+    override def withFilter(q: A => Boolean): IterableOps.WithFilter[A, Stream] = new WithFilter(filtered, q)
   }
 
   /** An infinite Stream that repeatedly applies a given function to a start value.

@@ -53,7 +53,7 @@ trait MapView[K, +V]
 
   override def empty: MapView[K, V] = mapFactory.empty
 
-  override def withFilter(p: ((K, V)) => Boolean): MapOps.WithFilter[K, V, View, ({ type l[X, Y] = View[(X, Y)] })#l] = new MapOps.WithFilter(this, p)
+  override def withFilter(p: ((K, V)) => Boolean): MapView.WithFilter[K, V] = new MapView.WithFilter[K, V](this, p)
 }
 
 object MapView extends MapViewFactory {
@@ -133,6 +133,13 @@ object MapView extends MapViewFactory {
   }
 
   override def apply[K, V](elems: (K, V)*): MapView[K, V] = from(elems.toMap)
+
+  class WithFilter[K, +V](protected[this] val coll: MapView[K, V], protected[this] val p: ((K, V)) => Boolean)
+    extends IterableOps.WithFilter[(K, V), View]
+    with MapOps.WithFilter[K, V, ({ type l[X, Y] = View[(X, Y)] })#l] {
+
+    override def withFilter(q: ((K, V)) => Boolean): WithFilter[K, V] = new WithFilter[K, V](coll, (a: (K, V)) => p(a) && q(a))
+  }
 }
 
 trait MapViewFactory extends collection.MapFactory[({ type l[X, Y] = View[(X, Y)]})#l] {

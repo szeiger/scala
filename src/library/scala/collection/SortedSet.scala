@@ -31,7 +31,7 @@ trait SortedSet[A] extends Set[A]
 
 trait SortedSetOps[A, +CC[X] <: SortedSet[X], +C <: SortedSetOps[A, CC, C]]
   extends SetOps[A, Set, C]
-     with SortedOps[A, C] {
+     with SortedOps[A, C] { self =>
 
   /** The companion object of this sorted set, providing various factory methods.
     *
@@ -141,31 +141,34 @@ trait SortedSetOps[A, +CC[X] <: SortedSet[X], +C <: SortedSetOps[A, CC, C]]
     */
   def collect[B](pf: scala.PartialFunction[A, B])(implicit @implicitNotFound(SortedSetOps.ordMsg) ev: Ordering[B]): CC[B] =
     sortedIterableFactory.from(new View.Collect(toIterable, pf))
+
+  override def withFilter(pred: A => Boolean): SortedSetOps.WithFilter[A, CC, C] =
+    new SortedSetOps.WithFilter[A, CC, C] { def coll = self; def p = pred }
 }
 
 object SortedSetOps {
   private[collection] final val ordMsg = "No implicit Ordering[${B}] found to build a SortedSet[${B}]. You may want to upcast to a Set[${A}] first by calling `unsorted`."
   private[collection] final val zipOrdMsg = "No implicit Ordering[${B}] found to build a SortedSet[(${A}, ${B})]. You may want to upcast to a Set[${A}] first by calling `unsorted`."
 
-  /** Specialize `WithFilter` for sorted collections
+  /** Specialize `IterableOps.WithFilter` for sorted collections
     *
     * @define coll sorted collection
     */
-  class WithFilter[+A, +IterableCC[_], +CC[X] <: SortedSet[X]](
-    self: SortedSetOps[A, CC, _] with IterableOps[A, IterableCC, _],
-    p: A => Boolean
-  ) extends IterableOps.WithFilter[A, IterableCC](self, p) {
+  @SerialVersionUID(3L)
+  trait WithFilter[A, +CC[X] <: SortedSet[X], +C <: SortedSetOps[A, CC, C]] extends IterableOps.WithFilter[A, Set] { self =>
+    protected[this] def coll: SortedSetOps[A, CC, C]
 
     def map[B : Ordering](f: A => B): CC[B] =
-      self.sortedIterableFactory.from(new View.Map(filtered, f))
+      coll.sortedIterableFactory.from(new View.Map(filtered, f))
 
     def flatMap[B : Ordering](f: A => IterableOnce[B]): CC[B] =
-      self.sortedIterableFactory.from(new View.FlatMap(filtered, f))
+      coll.sortedIterableFactory.from(new View.FlatMap(filtered, f))
 
-    override def withFilter(q: A => Boolean): WithFilter[A, IterableCC, CC] =
-      new WithFilter[A, IterableCC, CC](self, (a: A) => p(a) && q(a))
+    override def withFilter(q: A => Boolean): WithFilter[A, CC, C] = new WithFilter[A, CC, C] {
+      def coll = self.coll
+      val p = (a: A) => self.p(a) && q(a)
+    }
   }
-
 }
 
 @SerialVersionUID(3L)

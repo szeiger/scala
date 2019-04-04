@@ -460,7 +460,7 @@ final class LazyList[+A] private(private[this] var lazyState: () => LazyList.Sta
     * The `collection.WithFilter` returned by this method preserves laziness; elements are
     * only evaluated individually as needed.
     */
-  override def withFilter(p: A => Boolean): collection.WithFilter[A, LazyList] =
+  override def withFilter(p: A => Boolean): IterableOps.WithFilter[A, LazyList] =
     new LazyList.WithFilter(coll, p)
 
   /** @inheritdoc
@@ -1153,13 +1153,12 @@ object LazyList extends SeqFactory[LazyList] {
     }
   }
 
-  private final class WithFilter[A] private[LazyList](lazyList: LazyList[A], p: A => Boolean)
-    extends collection.WithFilter[A, LazyList] {
-    private[this] val filtered = lazyList.filter(p)
-    def map[B](f: A => B): LazyList[B] = filtered.map(f)
-    def flatMap[B](f: A => IterableOnce[B]): LazyList[B] = filtered.flatMap(f)
-    def foreach[U](f: A => U): Unit = filtered.foreach(f)
-    def withFilter(q: A => Boolean): collection.WithFilter[A, LazyList] = new WithFilter(filtered, q)
+  private final class WithFilter[A] private[LazyList](protected[this] val coll: LazyList[A], protected[this] val p: A => Boolean)
+    extends IterableOps.WithFilter[A, LazyList] {
+    private[this] val filtered = coll.filter(p)
+    override def map[B](f: A => B): LazyList[B] = filtered.map(f)
+    override def flatMap[B](f: A => IterableOnce[B]): LazyList[B] = filtered.flatMap(f)
+    override def withFilter(q: A => Boolean): IterableOps.WithFilter[A, LazyList] = new WithFilter(filtered, q)
   }
 
   private final class LazyBuilder[A] extends ReusableBuilder[A, LazyList[A]] {

@@ -130,7 +130,7 @@ trait Iterable[+A] extends IterableOnce[A]
   *  The order in which operations are performed on elements is unspecified
   *  and may be nondeterministic.
   */
-trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with IterableOnceOps[A, CC, C] {
+trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with IterableOnceOps[A, CC, C] { self =>
   /**
     * @return This collection as an `Iterable[A]`. No new collection will be built if `this` is already an `Iterable[A]`.
     */
@@ -408,13 +408,14 @@ trait IterableOps[+A, +CC[_], +C] extends Any with IterableOnce[A] with Iterable
     *        and `withFilter` operations.
     *  $orderDependent
     *
-    *  @param p   the predicate used to test elements.
+    *  @param pred the predicate used to test elements.
     *  @return    an object of class `WithFilter`, which supports
     *             `map`, `flatMap`, `foreach`, and `withFilter` operations.
     *             All these operations apply to those elements of this $coll
     *             which satisfy the predicate `p`.
     */
-  def withFilter(p: A => Boolean): collection.WithFilter[A, CC] = new IterableOps.WithFilter(this, p)
+  def withFilter(pred: A => Boolean): IterableOps.WithFilter[A, CC] =
+    new IterableOps.WithFilter[A, CC] { def coll = self; def p = pred }
 
   /** A pair of, first, all elements that satisfy predicate `p` and, second,
     *  all elements that do not. Interesting because it splits a collection in two.
@@ -851,7 +852,7 @@ object IterableOps {
     @inline def >(size: Int): Boolean = it.sizeCompare(size) > 0
   }
 
-  /** A trait that contains just the `map`, `flatMap`, `foreach` and `withFilter` methods
+  /** A template trait that contains just the `map`, `flatMap`, `foreach` and `withFilter` methods
     * of trait `Iterable`.
     *
     * @tparam A Element type (e.g. `Int`)
@@ -860,27 +861,61 @@ object IterableOps {
     * @define coll collection
     */
   @SerialVersionUID(3L)
-  class WithFilter[+A, +CC[_]](
-    self: IterableOps[A, CC, _],
-    p: A => Boolean
-  ) extends collection.WithFilter[A, CC] with Serializable {
+  trait WithFilter[+A, +CC[_]] extends Serializable { self =>
+    protected[this] def coll: IterableOps[A, CC, _]
+    protected[this] def p: A => Boolean
+    protected[this] def filtered: Iterable[A] = new View.Filter(coll, p, isFlipped = false)
 
-    protected def filtered: Iterable[A] =
-      new View.Filter(self, p, isFlipped = false)
-
+    /** Builds a new collection by applying a function to all elements of the
+      * `filtered` outer $coll.
+      *
+      *  @param f      the function to apply to each element.
+      *  @tparam B     the element type of the returned collection.
+      *  @return       a new $coll resulting from applying
+      *                the given function `f` to each element of the filtered outer $coll
+      *                and collecting the results.
+      */
     def map[B](f: A => B): CC[B] =
-      self.iterableFactory.from(new View.Map(filtered, f))
+      coll.iterableFactory.from(new View.Map(filtered, f))
 
+    /** Builds a new collection by applying a function to all elements of the
+      * `filtered` outer $coll containing this `WithFilter` instance that satisfy
+      *
+      *  @param f      the function to apply to each element.
+      *  @tparam B     the element type of the returned collection.
+      *  @return       a new $coll resulting from applying
+      *                the given collection-valued function `f` to each element
+      *                of the filtered outer $coll and
+      *                concatenating the results.
+      */
     def flatMap[B](f: A => IterableOnce[B]): CC[B] =
-      self.iterableFactory.from(new View.FlatMap(filtered, f))
+      coll.iterableFactory.from(new View.FlatMap(filtered, f))
 
-    def foreach[U](f: A => U): Unit = filtered.foreach(f)
+    /** Applies a function `f` to all elements of the `filtered` outer $coll.
+      *
+      *  @param  f   the function that is applied for its side-effect to every element.
+      *              The result of function `f` is discarded.
+      *
+      *  @tparam  U  the type parameter describing the result of function `f`.
+      *              This result will always be ignored. Typically `U` is `Unit`,
+      *              but this is not necessary.
+      */
+    def foreach[U](f: A => U): Unit =
+      filtered.foreach(f)
 
-    def withFilter(q: A => Boolean): WithFilter[A, CC] =
-      new WithFilter(self, (a: A) => p(a) && q(a))
-
+    /** Further refines the filter for this `filtered` $coll.
+      *
+      *  @param q   the predicate used to test elements.
+      *  @return    an object of class `WithFilter`, which supports
+      *             `map`, `flatMap`, `foreach`, and `withFilter` operations.
+      *             All these operations apply to those elements of this $coll which
+      *             also satisfy both `p` and `q` predicates.
+      */
+    def withFilter(q: A => Boolean): WithFilter[A, CC] = new WithFilter[A, CC] {
+      def coll = self.coll
+      val p = (a: A) => self.p(a) && q(a)
+    }
   }
-
 }
 
 @SerialVersionUID(3L)
@@ -952,14 +987,14 @@ trait EvidenceIterableFactoryDefaults[+A, +CC[x] <: IterableOps[x, CC, CC[x]], E
 trait SortedSetFactoryDefaults[+A,
     +CC[X] <: SortedSet[X] with SortedSetOps[X, CC, CC[X]],
     +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Set[x]] extends SortedSetOps[A @uncheckedVariance, CC, CC[A @uncheckedVariance]] {
-  self: IterableOps[A, WithFilterCC, _] =>
+  self: IterableOps[A, Iterable, _] =>
 
   override protected def fromSpecific(coll: IterableOnce[A @uncheckedVariance]): CC[A @uncheckedVariance]    = sortedIterableFactory.from(coll)
   override protected def newSpecificBuilder: mutable.Builder[A @uncheckedVariance, CC[A @uncheckedVariance]] = sortedIterableFactory.newBuilder[A]
   override def empty: CC[A @uncheckedVariance] = sortedIterableFactory.empty
 
-  override def withFilter(p: A => Boolean): SortedSetOps.WithFilter[A, WithFilterCC, CC] =
-    new SortedSetOps.WithFilter[A, WithFilterCC, CC](this, p)
+  //override def withFilter(p: A => Boolean): SortedSetOps.WithFilter[A, WithFilterCC, CC] =
+  //  new SortedSetOps.WithFilter[A, WithFilterCC, CC](this, p)
 }
 
 
@@ -977,13 +1012,13 @@ trait SortedSetFactoryDefaults[+A,
   */
 trait MapFactoryDefaults[K, +V,
     +CC[x, y] <: IterableOps[(x, y), Iterable, Iterable[(x, y)]],
-    +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Iterable[x]] extends MapOps[K, V, CC, CC[K, V @uncheckedVariance]] with IterableOps[(K, V), WithFilterCC, CC[K, V @uncheckedVariance]] {
+    +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Iterable[x]] extends MapOps[K, V, CC, CC[K, V @uncheckedVariance]] {
   override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): CC[K, V @uncheckedVariance] = mapFactory.from(coll)
   override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), CC[K, V @uncheckedVariance]] = mapFactory.newBuilder[K, V]
   override def empty: CC[K, V @uncheckedVariance] = mapFactory.empty
 
-  override def withFilter(p: ((K, V)) => Boolean): MapOps.WithFilter[K, V, WithFilterCC, CC] =
-    new MapOps.WithFilter[K, V, WithFilterCC, CC](this, p)
+  //override def withFilter(p: ((K, V)) => Boolean): MapOps.WithFilter[K, V, WithFilterCC, CC] =
+  //  new MapOps.WithFilter[K, V, WithFilterCC, CC](this, p)
 }
 
 /** This trait provides default implementations for the factory methods `fromSpecific` and
@@ -1001,13 +1036,13 @@ trait MapFactoryDefaults[K, +V,
 trait SortedMapFactoryDefaults[K, +V,
     +CC[x, y] <:  Map[x, y] with SortedMapOps[x, y, CC, CC[x, y]] with UnsortedCC[x, y],
     +WithFilterCC[x] <: IterableOps[x, WithFilterCC, WithFilterCC[x]] with Iterable[x],
-    +UnsortedCC[x, y] <: Map[x, y]] extends SortedMapOps[K, V, CC, CC[K, V @uncheckedVariance]] with MapOps[K, V, UnsortedCC, CC[K, V @uncheckedVariance]] {
-  self: IterableOps[(K, V), WithFilterCC, _] =>
+    +UnsortedCC[x, y] <: Map[x, y]] extends SortedMapOps[K, V, CC, CC[K, V @uncheckedVariance]] with MapOps[K, V, Map, CC[K, V @uncheckedVariance]] {
+  self: IterableOps[(K, V), Iterable, _] =>
 
   override def empty: CC[K, V @uncheckedVariance] = sortedMapFactory.empty
   override protected def fromSpecific(coll: IterableOnce[(K, V @uncheckedVariance)]): CC[K, V @uncheckedVariance] = sortedMapFactory.from(coll)
   override protected def newSpecificBuilder: mutable.Builder[(K, V @uncheckedVariance), CC[K, V @uncheckedVariance]] = sortedMapFactory.newBuilder[K, V]
 
-  override def withFilter(p: ((K, V)) => Boolean): collection.SortedMapOps.WithFilter[K, V, WithFilterCC, UnsortedCC, CC] =
-    new collection.SortedMapOps.WithFilter[K, V, WithFilterCC, UnsortedCC, CC](this, p)
+  //override def withFilter(p: ((K, V)) => Boolean): collection.SortedMapOps.WithFilter[K, V, WithFilterCC, UnsortedCC, CC] =
+  //  new collection.SortedMapOps.WithFilter[K, V, WithFilterCC, UnsortedCC, CC](this, p)
 }
