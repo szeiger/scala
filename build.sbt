@@ -960,26 +960,7 @@ lazy val root: Project = (project in file("."))
 
     testAll := {
       val results = ScriptCommands.sequence[(Result[Unit], String)](List(
-        (Keys.test in Test in junit).result map (_ -> "junit/test"),
-        (Keys.test in Test in scalacheck).result map (_ -> "scalacheck/test"),
         partestDesc("run"),
-        partestDesc("pos neg jvm"),
-        partestDesc("res scalap specialized"),
-        partestDesc("instrumented presentation"),
-        partestDesc("--srcpath scaladoc"),
-        partestDesc("-Dpartest.scalac_opts=-Ymacro-annotations --srcpath macro-annot"),
-        (Keys.test in Test in osgiTestFelix).result map (_ -> "osgiTestFelix/test"),
-        (Keys.test in Test in osgiTestEclipse).result map (_ -> "osgiTestEclipse/test"),
-        (mimaReportBinaryIssues in library).result map (_ -> "library/mimaReportBinaryIssues"),
-        (mimaReportBinaryIssues in reflect).result map (_ -> "reflect/mimaReportBinaryIssues"),
-        testJDeps.result map (_ -> "testJDeps"),
-        (compile in Compile in bench).map(_ => ()).result map (_ -> "bench/compile"),
-        Def.task(()).dependsOn( // Run these in parallel:
-          doc in Compile in library,
-          doc in Compile in reflect,
-          doc in Compile in compiler,
-          doc in Compile in scalap
-        ).result map (_ -> "doc")
       )).value
       val log = streams.value.log
       val failed = results.collect { case (Inc(i), d) => (i, d) }

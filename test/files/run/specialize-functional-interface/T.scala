@@ -1,1 +1,0 @@
-trait T[@specialized(Int) A] { def t(a: A): A }
