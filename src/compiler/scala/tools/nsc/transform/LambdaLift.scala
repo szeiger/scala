@@ -505,6 +505,11 @@ abstract class LambdaLift extends InfoTransform {
             }
 
             treeCopy.ValDef(tree, mods, name, tpt1, factoryCall)
+          } else if(sym.enclClass.isSubClass(DelayedInitClass) && !mods.hasFlag(CAPTURED)) {
+            sym.setFlag(MUTABLE)
+            //sym.resetFlag(FINAL)
+            tree
+            //treeCopy.ValDef(tree, mods & MUTABLE &~ FINAL, name, tpt, rhs)
           } else tree
         case Return(Block(stats, value)) =>
           Block(stats, treeCopy.Return(tree, value)) setType tree.tpe setPos tree.pos
