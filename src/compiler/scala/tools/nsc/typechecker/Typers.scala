@@ -2319,7 +2319,7 @@ trait Typers extends Adaptations with Tags with TypersTracking with PatternTyper
         checkNonCyclic(ddef, tpt1)
         ddef.tpt.setType(tpt1.tpe)
         val typedMods = typedModifiers(ddef.mods)
-        val rhsAtOwner =
+        val rhsAtOwner = // introduced for async, but could be universally handy
           ddef.getAndRemoveAttachment[ChangeOwnerAttachment] match {
             case None => ddef.rhs
             case Some(ChangeOwnerAttachment(originalOwner)) => ddef.rhs.changeOwner(originalOwner, ddef.symbol)
