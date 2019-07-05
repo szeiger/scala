@@ -51,6 +51,8 @@ trait ScalaSettings extends StandardScalaSettings with Warnings {
   /*val toolcp =*/ PathSetting("-toolcp", "Add to the runner classpath.", "") withAbbreviation "--tool-class-path"
   val nobootcp = BooleanSetting("-nobootcp", "Do not use the boot classpath for the scala jars.") withAbbreviation "--no-boot-class-path"
 
+  val preprocessorConfig = PrefixSetting("-Ckey=value", "-C", "Add a preprocessor setting.")
+
   /**
    *  Standard settings
    */

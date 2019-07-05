@@ -481,6 +481,14 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     if (settings.YmacroAnnotations) new { val global: Global.this.type = Global.this } with Analyzer with MacroAnnotationNamers
     else new { val global: Global.this.type = Global.this } with Analyzer
 
+  // phaseName = "preprocessor"
+  object preprocessor extends {
+    val global: Global.this.type = Global.this
+    val runsAfter = List("parser")
+    // sbt needs to run right after typer, so don't conflict
+    val runsRightAfter = None
+  } with Preprocessor
+
   // phaseName = "superaccessors"
   object superAccessors extends {
     val global: Global.this.type = Global.this
@@ -663,6 +671,7 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
     // desirable to preserve.
     val phs = List(
       syntaxAnalyzer          -> "parse source into ASTs, perform simple desugaring",
+      preprocessor            -> "conditionally disable source elements",
       analyzer.namerFactory   -> "resolve names, attach symbols to named trees",
       analyzer.packageObjects -> "load package objects",
       analyzer.typerFactory   -> "the meat and potatoes: type the trees",

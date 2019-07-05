@@ -2289,7 +2289,11 @@ self =>
     }
 
     def annotationExpr(): Tree = atPos(in.offset) {
-      val t = exprSimpleType()
+      val t =
+        if(in.token == IF) {
+          in.nextToken()
+          SingletonTypeTree(Literal(Constant("<if>")))
+        } else exprSimpleType()
       if (in.token == LPAREN) New(t, multipleArgumentExprs())
       else New(t, Nil)
     }

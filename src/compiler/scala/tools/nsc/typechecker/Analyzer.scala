@@ -41,7 +41,7 @@ trait Analyzer extends AnyRef
     val global: Analyzer.this.global.type = Analyzer.this.global
   } with SubComponent {
     val phaseName = "namer"
-    val runsAfter = List[String]("parser")
+    val runsAfter = List[String]("preprocessor")
     val runsRightAfter = None
     def newPhase(_prev: Phase): StdPhase = new StdPhase(_prev) {
       override val checkable = false
