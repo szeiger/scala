@@ -42,8 +42,20 @@ abstract class Preprocessor extends Transform {
           if(evalBoolean(conds)) t.copy(mods = mods) else EmptyTree
         case t @ TypeDef(Conditions(mods, conds), _, _, _) =>
           if(evalBoolean(conds)) t.copy(mods = mods) else EmptyTree
-        //case t @ Annotated(annot, arg) => t
+        case t @ ModuleDef(Conditions(mods, conds), _, _) =>
+          if(evalBoolean(conds)) t.copy(mods = mods) else EmptyTree
+        case Annotated(Condition(cond), arg) =>
+          if(evalBoolean(cond)) arg else EmptyTree
         case t => t
+      }
+    }
+
+    object Condition {
+      def unapply(tree: Tree): Option[Tree] = tree match {
+        case a @ Apply(Select(New(SingletonTypeTree(Literal(Constant("<if>")))), nme.CONSTRUCTOR), args) =>
+          if(args.length != 1) reporter.error(a.pos, "one argument expected in preprocessor @if annotation")
+          Some(args.head)
+        case _ => None
       }
     }
 

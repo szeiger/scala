@@ -2884,8 +2884,7 @@ self =>
     }
 
     /** Hook for IDE, for top-level classes/objects. */
-    def topLevelTmplDef: Tree = {
-      val annots = annotations(skipNewLines = true)
+    def topLevelTmplDef(annots: List[Tree]): Tree = {
       val pos    = caseAwareTokenOffset
       val mods   = modifiers() withAnnotations annots
       tmplDef(pos, mods)
@@ -3173,13 +3172,35 @@ self =>
      */
     def topStatSeq(): List[Tree] = statSeq(topStat, errorMsg = "expected class or object definition")
     def topStat: PartialFunction[Token, List[Tree]] = {
-      case PACKAGE  =>
-        packageOrPackageObject(in.skipToken()) :: Nil
-      case IMPORT =>
-        in.flushDoc
-        importClause()
-      case _ if isAnnotation || isTemplateIntro || isModifier =>
-        joinComment(topLevelTmplDef :: Nil)
+      case _ if in.token == PACKAGE || in.token == IMPORT || isAnnotation || isTemplateIntro || isModifier => {
+        val annots = annotations(skipNewLines = true)
+        def ensurePreprocOnly(): Unit = annots.foreach {
+          case Apply(Select(New(SingletonTypeTree(Literal(Constant("<if>")))), nme.CONSTRUCTOR), _) => // OK
+          case t =>
+            syntaxError(t.pos, "only preprocessor annotations are allowed at this point: "+showRaw(t), skipIt = false)
+        }
+        in.token match {
+          case PACKAGE  =>
+            (packageOrPackageObject(in.skipToken()) match {
+              case p @ PackageDef(_, (m @ ModuleDef(_, nme.PACKAGE, _)) :: Nil) => // package object
+                ensurePreprocOnly()
+                p.copy(stats = m.copy(mods = m.mods.withAnnotations(annots)) :: Nil)
+              case p => // package declaration
+                if(annots.nonEmpty) {
+                  //TODO: We never get here. For some reason putting annotations in front of a package declaration results in a syntax error ("expected {") after the declaration
+                  syntaxError(annots.head.pos, "no annotations allowed for package declarations", skipIt = false)
+                }
+                p
+            }) :: Nil
+          case IMPORT =>
+            in.flushDoc
+            ensurePreprocOnly()
+            val is = importClause()
+            is.map(i => annots.foldLeft(i)(makeAnnotated)) // apply preprocessor annotations to all imports
+          case _ if isTemplateIntro || isModifier =>
+            joinComment(topLevelTmplDef(annots) :: Nil)
+        }
+      }
     }
 
     /** {{{

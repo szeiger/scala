@@ -1,3 +1,5 @@
+package abc.de
+
 import scala.annotation.Annotation
 
 /*
@@ -12,8 +14,14 @@ import scala.annotation.Annotation
  * additional information regarding copyright ownership.
  */
 
-//@if(feature == "baz")
-//import bla
+@if(feature == "import")
+import bla.blub
+
+@if(feature == "packageobject")
+package object abc {
+  xyz
+}
+
 
 @if(feature == "baz")
 class Foo {
@@ -32,5 +40,21 @@ class Bar {
   var x = y
 }
 
-//@if(feature == "baz")
-//package object blah
+class C1 {
+  @if(feature == "baz")
+  def f = xxx
+
+  @if(feature == "foo")
+  def f = 42
+
+  def g: Int = f
+}
+
+class C2 {
+  def f = {
+    (xxx: @if(feature == "baz"))
+    (42: @if(feature == "foo"))
+  }
+
+  def g: Int = f
+}
