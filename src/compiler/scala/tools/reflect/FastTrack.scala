@@ -67,7 +67,8 @@ class FastTrack[MacrosAndAnalyzer <: Macros with Analyzer](val macros: MacrosAnd
       makeBlackbox(            StringContext_raw) { case _                                        => _.interpolateRaw },
       makeBlackbox(ReflectRuntimeCurrentMirror) { case _                                          => c => currentMirror(c).tree },
       makeWhitebox(  QuasiquoteClass_api_apply) { case _                                          => _.expandQuasiquote },
-      makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote }
+      makeWhitebox(QuasiquoteClass_api_unapply) { case _                                          => _.expandQuasiquote },
+      makeBlackbox(             SysPackage_cfg) { case Applied(_, _, (key :: _) :: _)             => c => preprocessor.expandCfg(c)(key).tree },
     )
   }
 }

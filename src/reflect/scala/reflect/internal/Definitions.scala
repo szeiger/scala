@@ -587,6 +587,10 @@ trait Definitions extends api.StandardDefinitions {
     lazy val MethodHandleClass = getClassIfDefined("java.lang.invoke.MethodHandle")
     lazy val VarHandleClass = getClassIfDefined("java.lang.invoke.VarHandle")
 
+    // scala.sys
+    lazy val SysPackage                 = requiredModule[scala.sys.`package`.type]
+    lazy val SysPackage_cfg             = getMemberMethod(SysPackage, nme.cfg)
+
     // Option classes
     lazy val OptionClass: ClassSymbol   = requiredClass[Option[_]]
     lazy val OptionModule: ModuleSymbol = requiredModule[scala.Option.type]

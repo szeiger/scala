@@ -699,6 +699,7 @@ trait StdNames {
     val bytes: NameType                = "bytes"
     val c: NameType                    = "c"
     val canEqual_ : NameType           = "canEqual"
+    val cfg: NameType                  = "cfg"
     val classOf: NameType              = "classOf"
     val clone_ : NameType              = "clone"
     val collection: NameType           = "collection"

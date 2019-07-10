@@ -12,6 +12,8 @@
 
 package scala
 
+import scala.language.experimental.macros
+
 import scala.collection.immutable
 import scala.collection.JavaConverters._
 
@@ -87,4 +89,12 @@ package object sys {
 
     immutable.ArraySeq.unsafeWrapArray(tarray).take(got)
   }
+
+  /** Return all values associated with a configuration key.
+    * Calls are expanded at compile-time.
+    *
+    * @param key The key to expand. This must be a string literal.
+    * @return A possibly empty sequence of configuration values assocaited with the key.
+    */
+  def cfg(key: String): Seq[String] = macro ???
 }

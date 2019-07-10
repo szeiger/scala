@@ -27,6 +27,18 @@ abstract class Preprocessor extends Transform {
 
   val phaseName: String = "preprocessor"
 
+  lazy val config: Map[String, Set[String]] = {
+    val raw = global.settings.preprocessorConfig.unparse.map(_.substring(2))
+    val split = raw.flatMap { s =>
+      val i = s.indexOf('=')
+      if(i == -1) Nil
+      else List((s.substring(0, i), s.substring(i+1)))
+    }
+    val c = split.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+    log("Configuration: "+c)
+    c
+  }
+
   def newTransformer(unit: CompilationUnit): Transformer =
     new PreprocessorTransformer(unit)
 
@@ -72,18 +84,6 @@ abstract class Preprocessor extends Transform {
       }
     }
 
-    lazy val config: Map[String, Set[String]] = {
-      val raw = global.settings.preprocessorConfig.unparse.map(_.substring(2))
-      val split = raw.flatMap { s =>
-        val i = s.indexOf('=')
-        if(i == -1) Nil
-        else List((s.substring(0, i), s.substring(i+1)))
-      }
-      val c = split.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
-      log("Configuration: "+c)
-      c
-    }
-
     def configBoolean(name: String): Boolean = {
       val p = config.get(name).getOrElse(Set.empty).nonEmpty
       log(s"configBoolean($name) = $p")
@@ -112,6 +112,18 @@ abstract class Preprocessor extends Transform {
       case _ =>
         reporter.error(tree.pos, "unsupported expression in preprocessor predicate:\n  "+showRaw(tree))
         false
+    }
+  }
+
+  // Fast-track implementation of scala.sys.cfg macro
+  def expandCfg(c: scala.reflect.macros.blackbox.Context)(key: c.Tree): c.Expr[Seq[String]] = {
+    import c.universe._
+    key match {
+      case Literal(Constant(key: String)) =>
+        val values = config.get(key).getOrElse(Set.empty).iterator.map(s => Literal(Constant(s))).toSeq
+        c.Expr(q"Seq[String](..$values)")
+      case _ =>
+        c.abort(key.pos, "argument to sys.cfg must be a String literal")
     }
   }
 }
