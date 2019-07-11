@@ -3181,17 +3181,9 @@ self =>
         }
         in.token match {
           case PACKAGE  =>
-            (packageOrPackageObject(in.skipToken()) match {
-              case p @ PackageDef(_, (m @ ModuleDef(_, nme.PACKAGE, _)) :: Nil) => // package object
-                ensurePreprocOnly()
-                p.copy(stats = m.copy(mods = m.mods.withAnnotations(annots)) :: Nil)
-              case p => // package declaration
-                if(annots.nonEmpty) {
-                  //TODO: We never get here. For some reason putting annotations in front of a package declaration results in a syntax error ("expected {") after the declaration
-                  syntaxError(annots.head.pos, "no annotations allowed for package declarations", skipIt = false)
-                }
-                p
-            }) :: Nil
+            val p = packageOrPackageObject(in.skipToken())
+            ensurePreprocOnly()
+            annots.foldLeft(p)(makeAnnotated) :: Nil
           case IMPORT =>
             in.flushDoc
             ensurePreprocOnly()

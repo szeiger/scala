@@ -22,6 +22,12 @@ package object abc {
   xyz
 }
 
+@if(feature == "foo")
+package fg {
+  class inPackage
+}
+
+import abc.de.fg.inPackage
 
 @if(feature == "baz")
 class Foo {
