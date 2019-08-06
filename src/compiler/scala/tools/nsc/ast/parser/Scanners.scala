@@ -301,37 +301,39 @@ trait Scanners extends ScannersCommon {
      */
     def nextToken(): Unit = {
       val lastToken = token
-      // Adapt sepRegions according to last token
-      (lastToken: @switch) match {
-        case LPAREN =>
-          sepRegions = RPAREN :: sepRegions
-        case LBRACKET =>
-          sepRegions = RBRACKET :: sepRegions
-        case LBRACE =>
-          sepRegions = RBRACE :: sepRegions
-        case CASE =>
-          sepRegions = ARROW :: sepRegions
-        case RBRACE =>
-          while (!sepRegions.isEmpty && sepRegions.head != RBRACE)
-            sepRegions = sepRegions.tail
-          if (!sepRegions.isEmpty)
-            sepRegions = sepRegions.tail
+      if(!inPreproc) {
+        // Adapt sepRegions according to last token
+        (lastToken: @switch) match {
+          case LPAREN =>
+            sepRegions = RPAREN :: sepRegions
+          case LBRACKET =>
+            sepRegions = RBRACKET :: sepRegions
+          case LBRACE =>
+            sepRegions = RBRACE :: sepRegions
+          case CASE =>
+            sepRegions = ARROW :: sepRegions
+          case RBRACE =>
+            while (!sepRegions.isEmpty && sepRegions.head != RBRACE)
+              sepRegions = sepRegions.tail
+            if (!sepRegions.isEmpty)
+              sepRegions = sepRegions.tail
 
-          discardDocBuffer()
-        case RBRACKET | RPAREN =>
-          if (!sepRegions.isEmpty && sepRegions.head == lastToken)
-            sepRegions = sepRegions.tail
+            discardDocBuffer()
+          case RBRACKET | RPAREN =>
+            if (!sepRegions.isEmpty && sepRegions.head == lastToken)
+              sepRegions = sepRegions.tail
 
-          discardDocBuffer()
-        case ARROW =>
-          if (!sepRegions.isEmpty && sepRegions.head == lastToken)
-            sepRegions = sepRegions.tail
-        case STRINGLIT =>
-          if (inMultiLineInterpolation)
-            sepRegions = sepRegions.tail.tail
-          else if (inStringInterpolation)
-            sepRegions = sepRegions.tail
-        case _ =>
+            discardDocBuffer()
+          case ARROW =>
+            if (!sepRegions.isEmpty && sepRegions.head == lastToken)
+              sepRegions = sepRegions.tail
+          case STRINGLIT =>
+            if (inMultiLineInterpolation)
+              sepRegions = sepRegions.tail.tail
+            else if (inStringInterpolation)
+              sepRegions = sepRegions.tail
+          case _ =>
+        }
       }
 
       // Read a token or copy it from `next` tokenData
@@ -352,60 +354,243 @@ trait Scanners extends ScannersCommon {
         next.token = EMPTY
       }
 
-      /* Insert NEWLINE or NEWLINES if
-       * - we are after a newline
-       * - we are within a { ... } or on toplevel (wrt sepRegions)
-       * - the current token can start a statement and the one before can end it
-       * insert NEWLINES if we are past a blank line, NEWLINE otherwise
-       */
-      if (!applyBracePatch() && afterLineEnd() && inLastOfStat(lastToken) && inFirstOfStat(token) &&
+
+      if(inPreproc) {
+        /* A newline terminates the preprocessor directive, so we insert an extra ENDPREPROC */
+        if (afterLineEnd()) {
+          next copyFrom this
+          offset = if (lineStartOffset <= offset) lineStartOffset else lastLineStartOffset
+          token = ENDPREPROC
+        }
+        //if(token == (token != NEWLINE) && (token != NEWLINES) && (token != EOF))
+      } else {
+        /* Insert NEWLINE or NEWLINES if
+         * - we are after a newline
+         * - we are within a { ... } or on toplevel (wrt sepRegions)
+         * - the current token can start a statement and the one before can end it
+         * insert NEWLINES if we are past a blank line, NEWLINE otherwise
+         */
+        if (!applyBracePatch() && afterLineEnd() && inLastOfStat(lastToken) && inFirstOfStat(token) &&
           (sepRegions.isEmpty || sepRegions.head == RBRACE)) {
-        next copyFrom this
-        offset = if (lineStartOffset <= offset) lineStartOffset else lastLineStartOffset
-        token = if (pastBlankLine()) NEWLINES else NEWLINE
+          next copyFrom this
+          offset = if (lineStartOffset <= offset) lineStartOffset else lastLineStartOffset
+          token = if (pastBlankLine()) NEWLINES else NEWLINE
+        }
+
+        // Join CASE + CLASS => CASECLASS, CASE + OBJECT => CASEOBJECT, SEMI + ELSE => ELSE
+        if (token == CASE) {
+          prev copyFrom this
+          val nextLastOffset = charOffset - 1
+          fetchToken()
+          def resetOffset(): Unit = {
+            offset = prev.offset
+            lastOffset = prev.lastOffset
+          }
+          if (token == CLASS) {
+            token = CASECLASS
+            resetOffset()
+          } else if (token == OBJECT) {
+            token = CASEOBJECT
+            resetOffset()
+          } else {
+            lastOffset = nextLastOffset
+            next copyFrom this
+            this copyFrom prev
+          }
+        } else if (token == SEMI) {
+          prev copyFrom this
+          fetchToken()
+          if (token != ELSE) {
+            next copyFrom this
+            this copyFrom prev
+          }
+        } else if (token == COMMA) {
+          // SIP-27 Trailing Comma (multi-line only) support
+          // If a comma is followed by a new line & then a closing paren, bracket or brace
+          // then it is a trailing comma and is ignored
+          val saved = new ScannerData {} copyFrom this
+          fetchToken()
+          if (afterLineEnd() && (token == RPAREN || token == RBRACKET || token == RBRACE)) {
+            /* skip the trailing comma */
+          } else if (token == EOF) { // e.g. when the REPL is parsing "val List(x, y, _*,"
+            /* skip the trailing comma */
+          } else this copyFrom saved
+        } else if ((token == HASH) && afterLineEnd()) {
+          val hashOffset = offset
+          prev copyFrom this
+          val nextLastOffset = charOffset - 1
+          fetchToken()
+          if((offset == hashOffset+1) && (token == IDENTIFIER) || (token == IF)) {
+            inPreproc = true
+            val originalSepRegions = sepRegions
+            sepRegions = Nil
+            try parsePreproc() finally {
+              sepRegions = originalSepRegions
+              inPreproc = false
+              if(token == ENDPREPROC) token = NEWLINES
+              // TODO: should a preprocessor directive always count as multiple empty lines
+              // or only if preceded/followed by a real empty line?
+            }
+            //nextToken()
+            //next copyFrom this
+            //token = NEWLINE
+          } else {
+            lastOffset = nextLastOffset
+            next copyFrom this
+            this copyFrom prev
+          }
+        }
       }
 
-      // Join CASE + CLASS => CASECLASS, CASE + OBJECT => CASEOBJECT, SEMI + ELSE => ELSE
-      if (token == CASE) {
-        prev copyFrom this
-        val nextLastOffset = charOffset - 1
-        fetchToken()
-        def resetOffset(): Unit = {
-          offset = prev.offset
-          lastOffset = prev.lastOffset
-        }
-        if (token == CLASS) {
-          token = CASECLASS
-          resetOffset()
-        } else if (token == OBJECT) {
-          token = CASEOBJECT
-          resetOffset()
-        } else {
-          lastOffset = nextLastOffset
-          next copyFrom this
-          this copyFrom prev
-        }
-      } else if (token == SEMI) {
-        prev copyFrom this
-        fetchToken()
-        if (token != ELSE) {
-          next copyFrom this
-          this copyFrom prev
-        }
-      } else if (token == COMMA) {
-        // SIP-27 Trailing Comma (multi-line only) support
-        // If a comma is followed by a new line & then a closing paren, bracket or brace
-        // then it is a trailing comma and is ignored
-        val saved = new ScannerData {} copyFrom this
-        fetchToken()
-        if (afterLineEnd() && (token == RPAREN || token == RBRACKET || token == RBRACE)) {
-          /* skip the trailing comma */
-        } else if (token == EOF) { // e.g. when the REPL is parsing "val List(x, y, _*,"
-          /* skip the trailing comma */
-        } else this copyFrom saved
+      if((token == EOF) && preprocStack.nonEmpty) {
+        error(preprocStack.head._2, s"Unterminated preprocessor directive '${preprocStack.head._1}'")
       }
-
 //      print("["+this+"]")
+    }
+
+    private def skipToNextPreproc(): Unit = {
+      val lastToken = token
+      var found = false
+      while(!found) {
+        // Read a token or copy it from `next` tokenData
+        if (next.token == EMPTY) {
+          lastOffset = charOffset - 1
+          if (lastOffset > 0 && buf(lastOffset) == '\n' && buf(lastOffset - 1) == '\r') {
+            lastOffset -= 1
+          }
+          if (inStringInterpolation) fetchStringPart() else fetchToken()
+        } else {
+          this copyFrom next
+          next.token = EMPTY
+        }
+
+        if ((token == HASH) && afterLineEnd()) {
+          val hashOffset = offset
+          prev copyFrom this
+          fetchToken()
+          if((offset == hashOffset+1) && (token == IDENTIFIER) || (token == IF)) {
+            found = true
+          }
+        } else if (token == EOF) {
+          found = true
+        }
+      }
+    }
+
+    /** Preprocessor mode: This is set when parsing preprocessor expressions. */
+    private var inPreproc: Boolean = false
+
+    /** The current stack of preprocessor directives */
+    private var preprocStack: List[(String, Offset)] = Nil
+
+    private def currentPreproc: String = preprocStack.headOption.map(_._1).getOrElse("")
+
+    private def parsePreproc(): Unit = {
+      val dir = token match {
+        case IF =>
+          preprocStack = ("if", offset) :: preprocStack
+          nextToken()
+          val pred = parsePreprocPredicate()
+          val p = evalBoolean(pred)
+          if(!p) {
+            skipToNextPreproc()
+            parsePreproc()
+          }
+        case IDENTIFIER if name.toString == "elif" =>
+          if(currentPreproc != "if") {
+            error(offset, s"Unexpected preprocessor directive 'elif'")
+            skipPreproc()
+          } else {
+            preprocStack = ("elif", offset) :: preprocStack.tail
+            nextToken()
+            val pred = parsePreprocPredicate()
+            val p = evalBoolean(pred)
+            if(!p) {
+              skipToNextPreproc()
+              parsePreproc()
+            }
+          }
+        case ELSE =>
+          val c = currentPreproc
+          if((c != "if") && (c != "elif")) {
+            error(offset, s"Unexpected preprocessor directive 'else'")
+          } else {
+            preprocStack = ("else", offset) :: preprocStack.tail
+          }
+          parseEmptyPreproc()
+        case IDENTIFIER if name.toString == "endif" =>
+          val c = currentPreproc
+          if((c != "if") && (c != "elif") && (c != "else")) {
+            error(offset, s"Unexpected preprocessor directive 'endif'")
+          } else {
+            preprocStack = preprocStack.tail
+          }
+          parseEmptyPreproc()
+        case _ =>
+          error(offset, "Unknown preprocessor directive")
+          skipPreproc()
+      }
+    }
+
+    private def parseEmptyPreproc(): Unit = {
+      nextToken()
+      if((token != ENDPREPROC) && (token != EOF)) {
+        error(offset, "No parameters expected in preprocessor directive")
+        while((token != ENDPREPROC) && (token != EOF)) {
+          nextToken()
+        }
+      }
+    }
+
+    private def skipPreproc(): Unit = {
+      while((token != ENDPREPROC) && (token != EOF))
+        nextToken()
+    }
+
+    def parsePreprocPredicate(): Tree /*= {
+      while((token != ENDPREPROC) && (token != EOF))
+        nextToken()
+      Literal(Constant(true)) //TODO
+    }*/
+
+    private lazy val config: Map[String, scala.collection.immutable.Set[String]] = {
+      val raw = global.settings.preprocessorConfig.unparse.map(_.substring(2))
+      val split = raw.flatMap { s =>
+        val i = s.indexOf('=')
+        if(i == -1) Nil
+        else List((s.substring(0, i), s.substring(i+1)))
+      }
+      val c = split.groupBy(_._1).view.mapValues(_.map(_._2).toSet).toMap
+      log("Configuration: "+c)
+      c
+    }
+
+    private def configBoolean(name: String): Boolean = {
+      val p = config.get(name).getOrElse(Set.empty).nonEmpty
+      log(s"configBoolean($name) = $p")
+      p
+    }
+
+    private def configBoolean(name: String, value: String): Boolean = {
+      val p = config.get(name).getOrElse(Set.empty).contains(value)
+      log(s"configBoolean($name, $value) = $p")
+      p
+    }
+
+    private def evalBoolean(tree: Tree): Boolean = tree match {
+      case Ident(TermName(name)) =>
+        configBoolean(name)
+      case Apply(Select(Ident(TermName(name)), TermName("$eq$eq")), List(Literal(Constant(value: String)))) =>
+        configBoolean(name, value)
+      case Apply(Select(lhs, TermName("$amp$amp")), List(rhs)) =>
+        evalBoolean(lhs) && evalBoolean(rhs)
+      case Apply(Select(lhs, TermName("$bar$bar")), List(rhs)) =>
+        evalBoolean(lhs) || evalBoolean(rhs)
+      case Select(t, TermName("unary_$bang")) =>
+        !evalBoolean(t)
+      case _ =>
+        reporter.error(tree.pos, "unsupported expression in preprocessor predicate:\n  "+showRaw(tree))
+        false
     }
 
     /** Is current token first one after a newline? */
@@ -1301,6 +1486,7 @@ trait Scanners extends ScannersCommon {
     case CASECLASS => "case class"
     case CASEOBJECT => "case object"
     case XMLSTART => "$XMLSTART$<"
+    case ENDPREPROC => "$ENDPREPROC$<"
     case _ =>
       (token2name get token) match {
         case Some(name) => "'" + name + "'"
@@ -1308,12 +1494,12 @@ trait Scanners extends ScannersCommon {
       }
   }
 
-  class MalformedInput(val offset: Offset, val msg: String) extends Exception
+  class MalformedInput(val offset: Offset, val msg: String) extends Exception("Malformed input at "+offset+": "+msg)
 
   /** A scanner for a given source file not necessarily attached to a compilation unit.
    *  Useful for looking inside source files that are not currently compiled to see what's there
    */
-  class SourceFileScanner(val source: SourceFile) extends Scanner {
+  abstract class SourceFileScanner(val source: SourceFile) extends Scanner {
     val buf = source.content
     override val decodeUni: Boolean = !settings.nouescape
 
@@ -1325,7 +1511,7 @@ trait Scanners extends ScannersCommon {
 
   /** A scanner over a given compilation unit
    */
-  class UnitScanner(val unit: CompilationUnit, patches: List[BracePatch]) extends SourceFileScanner(unit.source) {
+  abstract class UnitScanner(val unit: CompilationUnit, patches: List[BracePatch]) extends SourceFileScanner(unit.source) {
     def this(unit: CompilationUnit) = this(unit, List())
 
     override def deprecationWarning(off: Offset, msg: String, since: String) = currentRun.reporting.deprecationWarning(unit.position(off), msg, since)
@@ -1334,7 +1520,7 @@ trait Scanners extends ScannersCommon {
 
     private var bracePatches: List[BracePatch] = patches
 
-    lazy val parensAnalyzer = new ParensAnalyzer(unit, List())
+    lazy val parensAnalyzer = new ParensAnalyzer(unit, List(), this)
 
     override def parenBalance(token: Token) = parensAnalyzer.balance(token)
 
@@ -1343,11 +1529,11 @@ trait Scanners extends ScannersCommon {
       if (!parensAnalyzer.tabSeen) {
         var bal = parensAnalyzer.balance(RBRACE)
         while (bal < 0) {
-          patches = new ParensAnalyzer(unit, patches).insertRBrace()
+          patches = new ParensAnalyzer(unit, patches, this).insertRBrace()
           bal += 1
         }
         while (bal > 0) {
-          patches = new ParensAnalyzer(unit, patches).deleteRBrace()
+          patches = new ParensAnalyzer(unit, patches, this).deleteRBrace()
           bal -= 1
         }
       }
@@ -1375,8 +1561,10 @@ trait Scanners extends ScannersCommon {
     }
   }
 
-  class ParensAnalyzer(unit: CompilationUnit, patches: List[BracePatch]) extends UnitScanner(unit, patches) {
+  class ParensAnalyzer(unit: CompilationUnit, patches: List[BracePatch], parent: Scanner) extends UnitScanner(unit, patches) {
     val balance = mutable.Map(RPAREN -> 0, RBRACKET -> 0, RBRACE -> 0)
+
+    def parsePreprocPredicate(): Tree = parent.parsePreprocPredicate()
 
     /** The source code with braces and line starts annotated with [NN] showing the index */
     private def markedSource = {

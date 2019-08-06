@@ -125,7 +125,7 @@ abstract class ScaladocSyntaxAnalyzer[G <: Global](val global: G) extends Syntax
       }
   }
 
-  class ScaladocUnitScanner(unit0: CompilationUnit, patches0: List[BracePatch]) extends UnitScanner(unit0, patches0) with ScaladocScanner {
+  abstract class ScaladocUnitScanner(unit0: CompilationUnit, patches0: List[BracePatch]) extends UnitScanner(unit0, patches0) with ScaladocScanner {
     private object unmooredParser extends {                // minimalist comment parser
       val global: Global = ScaladocSyntaxAnalyzer.this.global
     }
@@ -169,8 +169,10 @@ abstract class ScaladocSyntaxAnalyzer[G <: Global](val global: G) extends Syntax
 
     protected def docPosition: Position = Position.range(unit.source, offset, offset, charOffset - 2)
   }
-  class ScaladocUnitParser(unit: CompilationUnit, patches: List[BracePatch]) extends UnitParser(unit, patches) {
-    override def newScanner() = new ScaladocUnitScanner(unit, patches)
+  class ScaladocUnitParser(unit: CompilationUnit, patches: List[BracePatch]) extends UnitParser(unit, patches) { self =>
+    override def newScanner() = new ScaladocUnitScanner(unit, patches) {
+      def parsePreprocPredicate(): Tree = self.parsePreprocPredicate()
+    }
     override def withPatches(patches: List[BracePatch]) = new ScaladocUnitParser(unit, patches)
 
     override def joinComment(trees: => List[Tree]): List[Tree] = {

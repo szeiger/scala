@@ -1112,8 +1112,8 @@ class Global(var currentSettings: Settings, reporter0: LegacyReporter)
   def newCompilationUnit(code: String, filename: String = "<console>") =
     new CompilationUnit(newSourceFile(code, filename))
 
-  def newUnitScanner(unit: CompilationUnit): UnitScanner =
-    new UnitScanner(unit)
+  //def newUnitScanner(unit: CompilationUnit): UnitScanner =
+  //  new UnitScanner(unit)
 
   def newUnitParser(unit: CompilationUnit): UnitParser =
     new UnitParser(unit)

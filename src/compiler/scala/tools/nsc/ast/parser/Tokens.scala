@@ -14,6 +14,8 @@ package scala.tools.nsc
 package ast.parser
 
 object Tokens extends CommonTokens {
+  final val ENDPREPROC = -4
+
   final val STRINGPART = 7 // a part of an interpolated string
   final val SYMBOLLIT = 8
   final val INTERPOLATIONID = 9 // the lead identifier of an interpolated string

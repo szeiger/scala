@@ -144,7 +144,7 @@ self =>
     def precedence = Precedence(operator.toString)
   }
 
-  class SourceFileParser(val source: SourceFile) extends Parser {
+  class SourceFileParser(val source: SourceFile) extends Parser { pself =>
 
     /** The parse starting point depends on whether the source file is self-contained:
      *  if not, the AST will be supplemented.
@@ -153,7 +153,15 @@ self =>
       if (source.isSelfContained) () => compilationUnit()
       else () => scriptBody()
 
-    def newScanner(): Scanner = new SourceFileScanner(source)
+    def newScanner(): Scanner = new SourceFileScanner(source) {
+      def parsePreprocPredicate(): Tree = pself.parsePreprocPredicate()
+    }
+
+    def parsePreprocPredicate(): Tree = {
+      val t = expr()
+      accept(ENDPREPROC)
+      t
+    }
 
     val in = newScanner()
     in.init()
@@ -208,8 +216,6 @@ self =>
 
   class UnitParser(override val unit: global.CompilationUnit, patches: List[BracePatch]) extends SourceFileParser(unit.source) { uself =>
     def this(unit: global.CompilationUnit) = this(unit, Nil)
-
-    override def newScanner() = new UnitScanner(unit, patches)
 
     override def warning(offset: Offset, msg: String): Unit =
       reporter.warning(o2p(offset), msg)
