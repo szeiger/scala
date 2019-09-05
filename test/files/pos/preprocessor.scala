@@ -37,6 +37,9 @@ class Foo {
 
 class Bar {
   @if(feature == "baz")
+  import abc.de.fg.inPackage
+
+  @if(feature == "baz")
   type T = S
 
   @if(feature == "baz")

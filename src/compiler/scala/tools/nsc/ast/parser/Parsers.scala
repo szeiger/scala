@@ -2663,6 +2663,7 @@ self =>
 
     private def caseAwareTokenOffset = if (in.token == CASECLASS || in.token == CASEOBJECT) in.prev.offset else in.offset
 
+    // not used in templateStat anymore but needed by ScaladocAnalyzer
     def nonLocalDefOrDcl : List[Tree] = {
       val annots = annotations(skipNewLines = true)
       defOrDcl(caseAwareTokenOffset, modifiers() withAnnotations annots)
@@ -3167,6 +3168,12 @@ self =>
       stats.toList
     }
 
+    private def ensurePreprocOnly(annots: List[Tree]): Unit = annots.foreach {
+      case Apply(Select(New(SingletonTypeTree(Literal(Constant("<if>")))), nme.CONSTRUCTOR), _) => // OK
+      case t =>
+        syntaxError(t.pos, "only preprocessor annotations are allowed at this point: "+showRaw(t), skipIt = false)
+    }
+
     /** {{{
      *  TopStatSeq ::= TopStat {semi TopStat}
      *  TopStat ::= Annotations Modifiers TmplDef
@@ -3180,19 +3187,14 @@ self =>
     def topStat: PartialFunction[Token, List[Tree]] = {
       case _ if in.token == PACKAGE || in.token == IMPORT || isAnnotation || isTemplateIntro || isModifier => {
         val annots = annotations(skipNewLines = true)
-        def ensurePreprocOnly(): Unit = annots.foreach {
-          case Apply(Select(New(SingletonTypeTree(Literal(Constant("<if>")))), nme.CONSTRUCTOR), _) => // OK
-          case t =>
-            syntaxError(t.pos, "only preprocessor annotations are allowed at this point: "+showRaw(t), skipIt = false)
-        }
         in.token match {
           case PACKAGE  =>
             val p = packageOrPackageObject(in.skipToken())
-            ensurePreprocOnly()
+            ensurePreprocOnly(annots)
             annots.foldLeft(p)(makeAnnotated) :: Nil
           case IMPORT =>
             in.flushDoc
-            ensurePreprocOnly()
+            ensurePreprocOnly(annots)
             val is = importClause()
             is.map(i => annots.foldLeft(i)(makeAnnotated)) // apply preprocessor annotations to all imports
           case _ if isTemplateIntro || isModifier =>
@@ -3248,7 +3250,17 @@ self =>
         in.flushDoc
         importClause()
       case _ if isDefIntro || isModifier || isAnnotation =>
-        joinComment(nonLocalDefOrDcl)
+        val annots = annotations(skipNewLines = true)
+        in.token match {
+          case IMPORT =>
+            ensurePreprocOnly(annots)
+            in.flushDoc
+            val is = importClause()
+            is.map(i => annots.foldLeft(i)(makeAnnotated)) // apply preprocessor annotations to all imports
+          case _ =>
+            val t = defOrDcl(caseAwareTokenOffset, modifiers() withAnnotations annots)
+            joinComment(t)
+        }
       case _ if isExprIntro =>
         in.flushDoc
         statement(InTemplate) :: Nil
