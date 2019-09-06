@@ -420,7 +420,7 @@ trait Scanners extends ScannersCommon {
           prev copyFrom this
           val nextLastOffset = charOffset - 1
           fetchToken()
-          if((offset == hashOffset+1) && (token == IDENTIFIER) || (token == IF)) {
+          if((offset == hashOffset+1) && (token == IDENTIFIER) || (token == IF) || (token == ELSE)) {
             inPreproc = true
             val originalSepRegions = sepRegions
             sepRegions = Nil
@@ -481,17 +481,17 @@ trait Scanners extends ScannersCommon {
     private var inPreproc: Boolean = false
 
     /** The current stack of preprocessor directives */
-    private var preprocStack: List[(String, Offset)] = Nil
+    private var preprocStack: List[(String, Offset, Boolean)] = Nil
 
     private def currentPreproc: String = preprocStack.headOption.map(_._1).getOrElse("")
 
     private def parsePreproc(): Unit = {
       val dir = token match {
         case IF =>
-          preprocStack = ("if", offset) :: preprocStack
           nextToken()
           val pred = parsePreprocPredicate()
           val p = evalBoolean(pred)
+          preprocStack = ("if", offset, p) :: preprocStack
           if(!p) {
             skipToNextPreproc()
             parsePreproc()
@@ -501,10 +501,11 @@ trait Scanners extends ScannersCommon {
             error(offset, s"Unexpected preprocessor directive 'elif'")
             skipPreproc()
           } else {
-            preprocStack = ("elif", offset) :: preprocStack.tail
+            val alreadyMatched = preprocStack.head._3
             nextToken()
             val pred = parsePreprocPredicate()
-            val p = evalBoolean(pred)
+            val p = !alreadyMatched && evalBoolean(pred)
+            preprocStack = ("elif", offset, alreadyMatched || p) :: preprocStack.tail
             if(!p) {
               skipToNextPreproc()
               parsePreproc()
@@ -514,10 +515,16 @@ trait Scanners extends ScannersCommon {
           val c = currentPreproc
           if((c != "if") && (c != "elif")) {
             error(offset, s"Unexpected preprocessor directive 'else'")
+            parseEmptyPreproc()
           } else {
-            preprocStack = ("else", offset) :: preprocStack.tail
+            val alreadyMatched = preprocStack.head._3
+            preprocStack = ("else", offset, true) :: preprocStack.tail
+            parseEmptyPreproc()
+            if(alreadyMatched) {
+              skipToNextPreproc()
+              parsePreproc()
+            }
           }
-          parseEmptyPreproc()
         case IDENTIFIER if name.toString == "endif" =>
           val c = currentPreproc
           if((c != "if") && (c != "elif") && (c != "else")) {

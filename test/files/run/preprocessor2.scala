@@ -8,4 +8,13 @@ object Test extends App {
   #endif
 
   println(values.sorted.mkString(","))
+  println(Foo())
+}
+
+case object Foo {
+  #if feature == "foo"
+    def apply(firstFields: String*) = 1
+  #else
+    def apply(fieldNames: String*) = 2
+  #endif
 }
