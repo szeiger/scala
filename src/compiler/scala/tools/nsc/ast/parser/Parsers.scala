@@ -217,6 +217,10 @@ self =>
   class UnitParser(override val unit: global.CompilationUnit, patches: List[BracePatch]) extends SourceFileParser(unit.source) { uself =>
     def this(unit: global.CompilationUnit) = this(unit, Nil)
 
+    override def newScanner() = new UnitScanner(unit, patches) {
+      def parsePreprocPredicate(): Tree = uself.parsePreprocPredicate()
+    }
+
     override def warning(offset: Offset, msg: String): Unit =
       reporter.warning(o2p(offset), msg)
 
