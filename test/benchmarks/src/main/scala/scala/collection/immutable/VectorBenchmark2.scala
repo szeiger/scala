@@ -34,7 +34,7 @@ class VectorBenchmark2 {
     a = Array.fill(size)(o)
     v = Vector.fill(size)(o)
     nv = NVector.fill(size)(o)
-    nv.validate()
+    nv.validateDebug()
     as = ArraySeq.fill(size)(o)
   }
 
@@ -66,7 +66,7 @@ class VectorBenchmark2 {
     var coll0, coll = v
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.prepended(o)
       i += 1
     }
@@ -77,8 +77,19 @@ class VectorBenchmark2 {
     var coll0, coll = v
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.appended(o)
+      i += 1
+    }
+    bh.consume(coll)
+  }
+
+  @Benchmark def vApprepend(bh: Blackhole): Any = {
+    var coll0, coll = v
+    var i = 0
+    while(i < size) {
+      if(i % 2 == 0) coll = coll.appended(o)
+      else coll = coll.prepended(o)
       i += 1
     }
     bh.consume(coll)
@@ -142,7 +153,7 @@ class VectorBenchmark2 {
     var coll0, coll = as
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.prepended(o)
       i += 1
     }
@@ -153,7 +164,7 @@ class VectorBenchmark2 {
     var coll0, coll = as
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.appended(o)
       i += 1
     }
@@ -198,7 +209,7 @@ class VectorBenchmark2 {
     var coll0, coll = a
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.prepended(o)
       i += 1
     }
@@ -209,7 +220,7 @@ class VectorBenchmark2 {
     var coll0, coll = a
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.appended(o)
       i += 1
     }
@@ -244,7 +255,7 @@ class VectorBenchmark2 {
     var coll0, coll = nv
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.prepended(o)
       i += 1
     }
@@ -255,8 +266,19 @@ class VectorBenchmark2 {
     var coll0, coll = nv
     var i = 0
     while(i < size) {
-      if(i % 10 == 0) coll = coll0
+      //if(i % 10 == 0) coll = coll0
       coll = coll.appended(o)
+      i += 1
+    }
+    bh.consume(coll)
+  }
+
+  @Benchmark def nvApprepend(bh: Blackhole): Any = {
+    var coll0, coll = nv
+    var i = 0
+    while(i < size) {
+      if(i % 2 == 0) coll = coll.appended(o)
+      else coll = coll.prepended(o)
       i += 1
     }
     bh.consume(coll)
