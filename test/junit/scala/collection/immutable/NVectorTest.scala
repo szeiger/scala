@@ -301,4 +301,43 @@ class NVectorTest {
     assertEquals(a0 ++ b0 ++ c0 ++ d0 ++ e0, a ++ b ++ c ++ d ++ e)
     assertEquals(a0 ++ b0 ++ c0 ++ d0 ++ e0 ++ f0, a ++ b ++ c ++ d ++ e ++ f)
   }
+
+
+
+
+  val WIDTH = 32
+  val allSizes = Seq(0, 1, WIDTH, WIDTH+1, WIDTH*WIDTH, WIDTH*WIDTH+1, WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH+1,
+    WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH+1, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1,
+    WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1, Int.MaxValue)
+  val smallSizes = allSizes.filter(_ <= WIDTH*WIDTH*WIDTH*WIDTH)
+
+  @Test
+  def testAligned: Unit = for(size <- smallSizes) {
+    val v = NVector.range(0, size)
+    //println(v.toDebugString)
+    v.validateDebug()
+    assertEquals(size, v.length)
+    assertEquals(0 until size, v)
+  }
+
+  @Test
+  def testNonAligned: Unit = for(size <- smallSizes.filter(n => n > 0 && n < WIDTH*WIDTH*WIDTH*WIDTH)) {
+    val v = 0 +: NVector.range(1, size)
+    //println(v.toDebugString)
+    v.validateDebug()
+    assertEquals(size, v.length)
+    assertEquals(0 until size, v)
+  }
+
+
+  @Test
+  def testUpdate: Unit = for(size <- smallSizes) {
+    var v = NVector.range(0, size)
+    var i = 0
+    while(i < size) {
+      v = v.updated(i, i-13)
+      i += 1
+    }
+    assertEquals(-13 until size-13, v)
+  }
 }

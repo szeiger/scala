@@ -19,11 +19,15 @@ import scala.collection.IterableOps
 @State(Scope.Benchmark)
 class VectorBenchmark2 {
 
-  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000" /*, "2000", "1000000" */))
+  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
+  //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000"))
+  //@Param(Array("1", "5", "10"))
+  //@Param(Array("2000", "10000"))
+  //@Param(Array("100", "1000"))
   var size: Int = _
 
   val rand = new Random(42)
-  val o = new AnyRef
+  val o, p = new AnyRef
 
   var a: Array[AnyRef] = _
   var v: Vector[AnyRef] = _
@@ -35,6 +39,7 @@ class VectorBenchmark2 {
     v = Vector.fill(size)(o)
     nv = NVector.fill(size)(o)
     nv.validateDebug()
+    NVector.fillSparse(size)(o).validateDebug()
     as = ArraySeq.fill(size)(o)
   }
 
@@ -123,6 +128,27 @@ class VectorBenchmark2 {
       i += 1
     }
     bh.consume(v)
+  }
+
+  @Benchmark def vIterator(bh: Blackhole): Any = {
+    var coll = v
+    val it = coll.iterator
+    while(it.hasNext) bh.consume(it.next())
+  }
+
+  @Benchmark def vForeach(bh: Blackhole): Any = {
+    var coll = v
+    coll.foreach(bh.consume _)
+  }
+
+  @Benchmark def vMapIdentity(bh: Blackhole): Any = {
+    var coll = v
+    bh.consume(coll.map(identity))
+  }
+
+  @Benchmark def vMapNew(bh: Blackhole): Any = {
+    var coll = v
+    bh.consume(coll.map(_ => p))
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -294,6 +320,10 @@ class VectorBenchmark2 {
     bh.consume(b.result())
   }
 
+  @Benchmark def nvFillSparse(bh: Blackhole): Any = {
+    bh.consume(NVector.fillSparse(size)(o))
+  }
+
   @Benchmark def nvUpdateSequential(bh: Blackhole): Any = {
     var nv = this.nv
     var i = 0
@@ -313,4 +343,26 @@ class VectorBenchmark2 {
     }
     bh.consume(nv)
   }
+
+  @Benchmark def nvIterator(bh: Blackhole): Any = {
+    var coll = nv
+    val it = coll.iterator
+    while(it.hasNext) bh.consume(it.next())
+  }
+
+  @Benchmark def nvForeach(bh: Blackhole): Any = {
+    var coll = nv
+    coll.foreach(bh.consume _)
+  }
+
+  @Benchmark def nvMapIdentity(bh: Blackhole): Any = {
+    var coll = nv
+    bh.consume(coll.map(identity))
+  }
+
+  @Benchmark def nvMapNew(bh: Blackhole): Any = {
+    var coll = nv
+    bh.consume(coll.map(_ => p))
+  }
+
 }
