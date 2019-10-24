@@ -19,11 +19,11 @@ import scala.collection.IterableOps
 @State(Scope.Benchmark)
 class VectorBenchmark2 {
 
-  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
+  //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
   //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000"))
   //@Param(Array("1", "5", "10"))
   //@Param(Array("2000", "10000"))
-  //@Param(Array("100", "1000"))
+  @Param(Array("100", "500", "1000"))
   var size: Int = _
 
   val rand = new Random(42)
@@ -128,6 +128,15 @@ class VectorBenchmark2 {
       i += 1
     }
     bh.consume(v)
+  }
+
+  @Benchmark def vHead(bh: Blackhole): Any = {
+    var coll = v
+    var i = 0
+    while(i < 1000) {
+      bh.consume(coll.head)
+      i += 1
+    }
   }
 
   @Benchmark def vIterator(bh: Blackhole): Any = {
@@ -342,6 +351,15 @@ class VectorBenchmark2 {
       i += 1
     }
     bh.consume(nv)
+  }
+
+  @Benchmark def nvHead(bh: Blackhole): Any = {
+    var coll = nv
+    var i = 0
+    while(i < 1000) {
+      bh.consume(coll.head)
+      i += 1
+    }
   }
 
   @Benchmark def nvIterator(bh: Blackhole): Any = {
