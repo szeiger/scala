@@ -322,7 +322,9 @@ class NVectorTest {
 
   @Test
   def testNonAligned: Unit = for(size <- smallSizes.filter(n => n > 0 && n < WIDTH*WIDTH*WIDTH*WIDTH)) {
-    val v = 0 +: NVector.range(1, size)
+    val v0 = NVector.range(1, size)
+    val v = 0 +: v0
+    //println(v0.toDebugString)
     //println(v.toDebugString)
     v.validateDebug()
     assertEquals(size, v.length)
