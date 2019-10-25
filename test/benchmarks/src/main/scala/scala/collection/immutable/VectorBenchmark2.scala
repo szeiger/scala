@@ -19,11 +19,11 @@ import scala.collection.IterableOps
 @State(Scope.Benchmark)
 class VectorBenchmark2 {
 
-  //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
+  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
   //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000"))
   //@Param(Array("1", "5", "10"))
   //@Param(Array("2000", "10000"))
-  @Param(Array("100", "500", "1000"))
+  //@Param(Array("100", "500", "1000"))
   var size: Int = _
 
   val rand = new Random(42)

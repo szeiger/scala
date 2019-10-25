@@ -122,14 +122,16 @@ sealed abstract class NVector[+A]
 
 /** Empty vector */
 private final object NVector0 extends NVector[Nothing] {
+  import NVectorStatics._
+
   def length = 0
   def apply(index: Int) = throw new IndexOutOfBoundsException
 
   override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw new IndexOutOfBoundsException
 
-  override def appended[B >: Nothing](elem: B): NVector[B] = new NVector1(Array[Any](elem))
+  override def appended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
 
-  override def prepended[B >: Nothing](elem: B): NVector[B] = new NVector1(Array[Any](elem))
+  override def prepended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
 
   override def appendedAll[B >: Nothing](suffix: collection.IterableOnce[B]): NVector[B] =
     NVector.from(suffix)
@@ -172,12 +174,12 @@ private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
       val a = copyOf(data1, length+1)
       a(length) = elem
       new NVector1(a)
-    } else new NVector2(data1, WIDTH, empty2, Array[Any](elem), WIDTH+1)
+    } else new NVector2(data1, WIDTH, empty2, wrap1(elem), WIDTH+1)
   }
 
   override def prepended[B >: A](elem: B): NVector[B] = {
     if(length < WIDTH) new NVector1(copyPrepend1(elem, data1))
-    else new NVector2(Array[Any](elem), 1, empty2, data1, length+1)
+    else new NVector2(wrap1(elem), 1, empty2, data1, length+1)
   }
 
   override def iterator: Iterator[A] = new ArrayOps.ArrayIterator(data1).asInstanceOf[Iterator[A]]
@@ -255,18 +257,18 @@ private final class NVector2[+A](prefix1: Array[Any], len1: Int,
     if(suffix1.length < WIDTH)
       new NVector2(prefix1, len1, data2, copyAppend1(suffix1, elem), length+1)
     else if(data2.length < WIDTH-2)
-      new NVector2(prefix1, len1, copyAppend(data2, suffix1), Array[Any](elem), length+1)
+      new NVector2(prefix1, len1, copyAppend(data2, suffix1), wrap1(elem), length+1)
     else
-      new NVector3(prefix1, len1, data2, WIDTH*(WIDTH-2) + len1, empty3, Array[Array[Any]](suffix1), Array[Any](elem), length+1)
+      new NVector3(prefix1, len1, data2, WIDTH*(WIDTH-2) + len1, empty3, wrap2(suffix1), wrap1(elem), length+1)
   }
 
   override def prepended[B >: A](elem: B): NVector[B] = {
     if(len1 < WIDTH)
       new NVector2(copyPrepend1(elem, prefix1), len1+1, data2, suffix1, length+1)
     else if(data2.length < WIDTH-2)
-      new NVector2(Array[Any](elem), 1, copyPrepend(prefix1, data2), suffix1, length+1)
+      new NVector2(wrap1(elem), 1, copyPrepend(prefix1, data2), suffix1, length+1)
     else
-      new NVector3(Array[Any](elem), 1, Array[Array[Any]](prefix1), len1+1, empty3, data2, suffix1, length+1)
+      new NVector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length+1)
   }
 
   override def foreach[U](f: A => U): Unit = {
@@ -359,22 +361,22 @@ private final class NVector3[+A](prefix1: Array[Any], len1: Int,
     if(suffix1.length < WIDTH)
       new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyAppend1(suffix1, elem), length+1)
     else if(suffix2.length < WIDTH-1)
-      new NVector3(prefix1, len1, prefix2, len12, data3, copyAppend(suffix2, suffix1), Array[Any](elem), length+1)
+      new NVector3(prefix1, len1, prefix2, len12, data3, copyAppend(suffix2, suffix1), wrap1(elem), length+1)
     else if(data3.length < WIDTH-2)
-      new NVector3(prefix1, len1, prefix2, len12, copyAppend(data3, copyAppend(suffix2, suffix1)), empty2, Array[Any](elem), length+1)
+      new NVector3(prefix1, len1, prefix2, len12, copyAppend(data3, copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length+1)
     else
-      new NVector4(prefix1, len1, prefix2, len12, data3, (WIDTH-2)*WIDTH2 + len12, empty4, Array[Array[Array[Any]]](copyAppend(suffix2, suffix1)), empty2, Array[Any](elem), length+1)
+      new NVector4(prefix1, len1, prefix2, len12, data3, (WIDTH-2)*WIDTH2 + len12, empty4, wrap3(copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length+1)
   }
 
   override def prepended[B >: A](elem: B): NVector[B] = {
     if(len1 < WIDTH)
       new NVector3(copyPrepend1(elem, prefix1), len1+1, prefix2, len12+1, data3, suffix2, suffix1, length+1)
     else if(len12 < WIDTH2)
-      new NVector3(Array[Any](elem), 1, copyPrepend(prefix1, prefix2), len12+1, data3, suffix2, suffix1, length+1)
+      new NVector3(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, data3, suffix2, suffix1, length+1)
     else if(data3.length < WIDTH-2)
-      new NVector3(Array[Any](elem), 1, empty2, len1, copyPrepend(copyPrepend(prefix1, prefix2), data3), suffix2, suffix1, length+1)
+      new NVector3(wrap1(elem), 1, empty2, len1, copyPrepend(copyPrepend(prefix1, prefix2), data3), suffix2, suffix1, length+1)
     else
-      new NVector4(Array[Any](elem), 1, empty2, 1, Array[Array[Array[Any]]](copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length+1)
+      new NVector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length+1)
   }
 
   override def foreach[U](f: A => U): Unit = {
@@ -488,11 +490,11 @@ private final class NVector4[+A](prefix1: Array[Any], len1: Int,
     if(suffix1.length < WIDTH)
       new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyAppend1(suffix1, elem), length+1)
     else if(suffix2.length < WIDTH-1)
-      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, copyAppend(suffix2, suffix1), Array[Any](elem), length+1)
+      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, copyAppend(suffix2, suffix1), wrap1(elem), length+1)
     else if(suffix3.length < WIDTH-1)
-      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, copyAppend(suffix3, copyAppend(suffix2, suffix1)), empty2, Array[Any](elem), length+1)
+      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, copyAppend(suffix3, copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length+1)
     else if(data4.length < WIDTH-2)
-      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, copyAppend(data4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), empty3, empty2, Array[Any](elem), length+1)
+      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, copyAppend(data4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), empty3, empty2, wrap1(elem), length+1)
     else ???
   }
 
@@ -500,11 +502,11 @@ private final class NVector4[+A](prefix1: Array[Any], len1: Int,
     if(len1 < WIDTH)
       new NVector4(copyPrepend1(elem, prefix1), len1+1, prefix2, len12+1, prefix3, len123+1, data4, suffix3, suffix2, suffix1, length+1)
     else if(len12 < WIDTH2)
-      new NVector4(Array[Any](elem), 1, copyPrepend(prefix1, prefix2), len12+1, prefix3, len123+1, data4, suffix3, suffix2, suffix1, length+1)
+      new NVector4(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, prefix3, len123+1, data4, suffix3, suffix2, suffix1, length+1)
     else if(len123 < WIDTH3)
-      new NVector4(Array[Any](elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, data4, suffix3, suffix2, suffix1, length+1)
+      new NVector4(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, data4, suffix3, suffix2, suffix1, length+1)
     else if(data4.length < WIDTH-2)
-      new NVector4(Array[Any](elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), data4), suffix3, suffix2, suffix1, length+1)
+      new NVector4(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), data4), suffix3, suffix2, suffix1, length+1)
     else ???
   }
 
@@ -574,22 +576,22 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
 
   def initSparse(size: Int, elem: A): Unit = {
     len = size
-    a1 = new Array[Any](WIDTH)
+    a1 = new Array(WIDTH)
     Arrays.fill(a1.asInstanceOf[Array[AnyRef]], elem.asInstanceOf[AnyRef])
     if(size > WIDTH) {
-      a2 = new Array[Array[Any]](WIDTH)
+      a2 = new Array(WIDTH)
       Arrays.fill(a2.asInstanceOf[Array[AnyRef]], a1)
       if(size > WIDTH2) {
-        a3 = new Array[Array[Array[Any]]](WIDTH)
+        a3 = new Array(WIDTH)
         Arrays.fill(a3.asInstanceOf[Array[AnyRef]], a2)
         if(size > WIDTH3) {
-          a4 = new Array[Array[Array[Array[Any]]]](WIDTH)
+          a4 = new Array(WIDTH)
           Arrays.fill(a4.asInstanceOf[Array[AnyRef]], a3)
           if(size > WIDTH4) {
-            a5 = new Array[Array[Array[Array[Array[Any]]]]](WIDTH)
+            a5 = new Array(WIDTH)
             Arrays.fill(a5.asInstanceOf[Array[AnyRef]], a4)
             if(size > WIDTH5) {
-              a6 = new Array[Array[Array[Array[Array[Array[Any]]]]]](LASTWIDTH)
+              a6 = new Array(LASTWIDTH)
               Arrays.fill(a6.asInstanceOf[Array[AnyRef]], a5)
               depth = 6
             } else depth = 5
@@ -608,44 +610,44 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   }
 
   private[this] def shift2(i2: Int): Unit = {
-    a1 = new Array[Any](WIDTH)
+    a1 = new Array(WIDTH)
     a2(i2) = a1
   }
 
   private[this] def shift3(i3: Int): Unit = {
-    a2 = new Array[Array[Any]](WIDTH)
+    a2 = new Array(WIDTH)
     a3(i3) = a2
   }
 
   private[this] def shift4(i4: Int): Unit = {
-    a3 = new Array[Array[Array[Any]]](WIDTH)
+    a3 = new Array(WIDTH)
     a4(i4) = a3
   }
 
   private[this] def shift5(i5: Int): Unit = {
-    a4 = new Array[Array[Array[Array[Any]]]](WIDTH)
+    a4 = new Array(WIDTH)
     a5(i5) = a4
   }
 
   private[this] def shift6(i6: Int): Unit = {
-    a5 = new Array[Array[Array[Array[Array[Any]]]]](WIDTH)
+    a5 = new Array(WIDTH)
     a6(i6) = a5
   }
 
   private[this] def advance(): Unit = (depth: @switch) match {
     case 0 =>
-      a1 = new Array[Any](WIDTH)
+      a1 = new Array(WIDTH)
       depth = 1
     case 1 =>
       if(len == WIDTH) {
-        a2 = new Array[Array[Any]](WIDTH)
+        a2 = new Array(WIDTH)
         a2(0) = a1
         shift2(1)
         depth = 2
       }
     case 2 =>
       if(len == WIDTH2) {
-        a3 = new Array[Array[Array[Any]]](WIDTH)
+        a3 = new Array(WIDTH)
         a3(0) = a2
         shift3(1)
         shift2(0)
@@ -659,7 +661,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       }
     case 3 =>
       if(len == WIDTH3) {
-        a4 = new Array[Array[Array[Array[Any]]]](WIDTH)
+        a4 = new Array(WIDTH)
         a4(0) = a3
         shift4(1)
         shift3(0)
@@ -678,7 +680,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       }
     case 4 =>
       if(len == WIDTH4) {
-        a5 = new Array[Array[Array[Array[Array[Any]]]]](WIDTH)
+        a5 = new Array(WIDTH)
         a5(0) = a4
         shift5(1)
         shift4(0)
@@ -702,7 +704,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       }
     case 5 =>
       if(len == WIDTH5) {
-        a6 = new Array[Array[Array[Array[Array[Array[Any]]]]]](LASTWIDTH)
+        a6 = new Array(LASTWIDTH)
         a6(0) = a5
         shift6(1)
         shift5(0)
@@ -862,10 +864,34 @@ private[immutable] object NVectorStatics {
     if(a.length == len) a
     else Arrays.copyOf(a.asInstanceOf[Array[AnyRef]], len).asInstanceOf[Array[Any]]
 
-  @inline final def empty1: Array[Any] = new Array(0)
-  @inline final def empty2: Array[Array[Any]] = new Array(0)
-  @inline final def empty3: Array[Array[Array[Any]]] = new Array(0)
-  @inline final def empty4: Array[Array[Array[Array[Any]]]] = new Array(0)
+  final val empty1: Array[Any] = new Array(0)
+  final val empty2: Array[Array[Any]] = new Array(0)
+  final val empty3: Array[Array[Array[Any]]] = new Array(0)
+  final val empty4: Array[Array[Array[Array[Any]]]] = new Array(0)
+
+  @inline final def wrap1(x: Any): Array[Any] = {
+    val a = new Array[Any](1)
+    a(0) = x
+    a
+  }
+
+  @inline final def wrap2(x: Array[Any]): Array[Array[Any]] = {
+    val a = new Array[Array[Any]](1)
+    a(0) = x
+    a
+  }
+
+  @inline final def wrap3(x: Array[Array[Any]]): Array[Array[Array[Any]]] = {
+    val a = new Array[Array[Array[Any]]](1)
+    a(0) = x
+    a
+  }
+
+  @inline final def wrap4(x: Array[Array[Array[Any]]]): Array[Array[Array[Array[Any]]]] = {
+    val a = new Array[Array[Array[Array[Any]]]](1)
+    a(0) = x
+    a
+  }
 
   @inline final def copyUpdate(a1: Array[Any], idx1: Int, elem: Any): Array[Any] = {
     val a1c = a1.clone()
@@ -941,7 +967,7 @@ private[immutable] object NVectorStatics {
   }
 
   final def mapElems1[A, B](a: Array[Any], f: A => B): Array[Any] = {
-    val ac: Array[Any] = new Array[Any](a.length)
+    val ac: Array[Any] = new Array(a.length)
     var i = 0
     while(i < a.length) {
       val v1 = a(i).asInstanceOf[AnyRef]
@@ -978,7 +1004,7 @@ private[immutable] object NVectorStatics {
       if(ac ne null) {
         ac(i) = v2
       } else if(v1 ne v2) {
-        ac = new Array[Any](a.length)
+        ac = new Array(a.length)
         var j = 0
         while(j < i) {
           ac(j) = a(j)
