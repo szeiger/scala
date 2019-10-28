@@ -310,6 +310,7 @@ class NVectorTest {
     WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH+1, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1,
     WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1, Int.MaxValue)
   val smallSizes = allSizes.filter(_ <= WIDTH*WIDTH*WIDTH*WIDTH)
+  val verySmallSizes = allSizes.filter(_ <= WIDTH*WIDTH)
 
   @Test
   def testAligned: Unit = for(size <- smallSizes) {
@@ -341,5 +342,31 @@ class NVectorTest {
       i += 1
     }
     assertEquals(-13 until size-13, v)
+  }
+
+  @Test
+  def testSlice: Unit = for(size <- smallSizes) {
+    val step = size/16 max 1
+    val v = NVector.range(0, size)
+    for {
+      from <- 0 until size by step
+      to <- from until size by step
+    } {
+      val v2 = v.slice(from, to)
+      v2.validateDebug()
+      assertEquals(from until to, v2)
+    }
+  }
+
+  @Test
+  def testTail: Unit = for(size <- verySmallSizes) {
+    var i = 0
+    var v = NVector.range(0, size)
+    //println("testTail: "+size)
+    while(!v.isEmpty) {
+      v = v.tail
+      i += 1
+      assertEquals(i until size, v)
+    }
   }
 }

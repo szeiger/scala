@@ -139,6 +139,25 @@ class VectorBenchmark2 {
     }
   }
 
+  @Benchmark def vTail(bh: Blackhole): Any = {
+    var coll, coll1 = v
+    var i = 0
+    while(i < 1000) {
+      coll = coll.tail
+      bh.consume(coll)
+      if(coll.isEmpty) coll = coll1
+      i += 1
+    }
+  }
+
+  /*
+  @Benchmark def vTail(bh: Blackhole): Any = {
+    var coll = v
+    while(coll.nonEmpty) coll = coll.tail
+    bh.consume(coll)
+  }
+  */
+
   @Benchmark def vIterator(bh: Blackhole): Any = {
     var coll = v
     val it = coll.iterator
@@ -358,6 +377,17 @@ class VectorBenchmark2 {
     var i = 0
     while(i < 1000) {
       bh.consume(coll.head)
+      i += 1
+    }
+  }
+
+  @Benchmark def nvTail(bh: Blackhole): Any = {
+    var coll, coll1 = nv
+    var i = 0
+    while(i < 1000) {
+      coll = coll.tail
+      bh.consume(coll)
+      if(coll.isEmpty) coll = coll1
       i += 1
     }
   }
