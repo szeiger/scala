@@ -16,10 +16,12 @@ package immutable
 import scala.annotation.switch
 import scala.collection.mutable.{ArrayBuilder, Builder, ReusableBuilder}
 import scala.collection.generic.DefaultSerializable
+import scala.reflect.ClassTag
 import java.util.Arrays
+import java.util.Arrays.{copyOf, copyOfRange}
 import java.lang.Math.{max => mmax, min => mmin}
 
-import scala.reflect.ClassTag
+import NVectorStatics.{Arr1, Arr2, Arr3, Arr4, Arr5, Arr6}
 
 object NVector extends StrictOptimizedSeqFactory[NVector] {
   import NVectorStatics._
@@ -35,7 +37,7 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
         else if (knownSize > 0 && knownSize <= WIDTH) {
           val a1 = new Array[Any](knownSize)
           it.iterator.copyToArray(a1)
-          new NVector1[E](a1)
+          new NVector1[E](a1.asInstanceOf[Array[AnyRef]])
         } else {
           (newBuilder ++= it).result()
         }
@@ -116,7 +118,7 @@ sealed abstract class NVector[+A]
     val hi = mmin(until, length)
     val newlen = hi - lo
     if(newlen == length) this
-    else if(newlen == 0) NVector0
+    else if(newlen <= 0) NVector0
     else slice0(lo, hi)
   }
 }
@@ -158,7 +160,7 @@ private final object NVector0 extends NVector[Nothing] {
   *
   * @param data1 The vector's content, with length between 1 and WIDTH.
   */
-private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
+private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   import NVectorStatics._
 
   @inline def length = data1.length
@@ -173,7 +175,7 @@ private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
   override def appended[B >: A](elem: B): NVector[B] = {
     if(length < WIDTH) {
       val a = copyOf(data1, length+1)
-      a(length) = elem
+      a(length) = elem.asInstanceOf[AnyRef]
       new NVector1(a)
     } else new NVector2(data1, WIDTH, empty2, wrap1(elem), WIDTH+1)
   }
@@ -194,7 +196,7 @@ private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
   private[collection] def toDebugString: String = {
     val sb = new mutable.StringBuilder()
     sb.append(s"NVector1\n")
-    logArray(sb, data1.asInstanceOf[Array[AnyRef]], "  ", "data1: ")
+    logArray(sb, data1, "  ", "data1: ")
     sb.result()
   }
 
@@ -205,15 +207,15 @@ private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
   override def last: A = data1(data1.length-1).asInstanceOf[A]
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[A] =
-    new NVector1(Arrays.copyOfRange(data1.asInstanceOf[Array[AnyRef]], lo, hi).asInstanceOf[Array[Any]])
+    new NVector1(copyOfRange(data1, lo, hi))
 
   override def tail: NVector[A] =
     if(data1.length == 1) NVector0
-    else new NVector1(copyDropHead1(data1))
+    else new NVector1(copyDropHead(data1))
 
   override def init: NVector[A] =
     if(data1.length == 1) NVector0
-    else new NVector1(copyDropLast1(data1))
+    else new NVector1(copyDropLast(data1))
 }
 
 /** 2-level radix tree with fingers at both ends.
@@ -224,9 +226,9 @@ private final class NVector1[+A](data1: Array[Any]) extends NVector[A] {
   * @param suffix1 The level 1 suffix
   * @param length The actual number of elements in the vector
   */
-private final class NVector2[+A](prefix1: Array[Any], len1: Int,
-                                 data2: Array[Array[Any]],
-                                 suffix1: Array[Any],
+private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
+                                 data2: Arr2,
+                                 suffix1: Array[AnyRef],
                                  val length: Int) extends NVector[A] {
   import NVectorStatics._
 
@@ -258,7 +260,7 @@ private final class NVector2[+A](prefix1: Array[Any], len1: Int,
 
   override def appended[B >: A](elem: B): NVector[B] = {
     if(suffix1.length < WIDTH)
-      new NVector2(prefix1, len1, data2, copyAppend1(suffix1, elem), length+1)
+      new NVector2(prefix1, len1, data2, copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length+1)
     else if(data2.length < WIDTH-2)
       new NVector2(prefix1, len1, copyAppend(data2, suffix1), wrap1(elem), length+1)
     else
@@ -283,9 +285,9 @@ private final class NVector2[+A](prefix1: Array[Any], len1: Int,
   private[collection] def toDebugString: String = {
     val sb = new mutable.StringBuilder()
     sb.append(s"NVector2(len1=$len1, length=$length)\n")
-    logArray(sb, prefix1.asInstanceOf[Array[AnyRef]], "  ", "prefix1: ")
+    logArray(sb, prefix1, "  ", "prefix1: ")
     logArray(sb, data2, "  ", "data2: ")
-    logArray(sb, suffix1.asInstanceOf[Array[AnyRef]], "  ", "suffix1: ")
+    logArray(sb, suffix1, "  ", "suffix1: ")
     sb.result()
   }
 
@@ -305,18 +307,18 @@ private final class NVector2[+A](prefix1: Array[Any], len1: Int,
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
     val b = new NVectorSliceBuilder(lo, hi)
-    b.consider(1, prefix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, prefix1)
     b.consider(2, data2)
-    b.consider(1, suffix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, suffix1)
     b.result()
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector2(copyDropHead1(prefix1), len1-1, data2, suffix1, length-1)
+    if(len1 > 1) new NVector2(copyDropHead(prefix1), len1-1, data2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector2(prefix1, len1, data2, copyDropLast1(suffix1), length-1)
+    if(suffix1.length > 1) new NVector2(prefix1, len1, data2, copyDropLast(suffix1), length-1)
     else slice0(0, length-1)
 }
 
@@ -332,10 +334,10 @@ private final class NVector2[+A](prefix1: Array[Any], len1: Int,
   * @param suffix1 The level 1 suffix
   * @param length The actual number of elements in the vector
   */
-private final class NVector3[+A](prefix1: Array[Any], len1: Int,
-                                 prefix2: Array[Array[Any]], len12: Int,
-                                 data3: Array[Array[Array[Any]]],
-                                 suffix2: Array[Array[Any]], suffix1: Array[Any],
+private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
+                                 prefix2: Arr2, len12: Int,
+                                 data3: Arr3,
+                                 suffix2: Arr2, suffix1: Array[AnyRef],
                                  val length: Int) extends NVector[A] {
   import NVectorStatics._
 
@@ -378,7 +380,7 @@ private final class NVector3[+A](prefix1: Array[Any], len1: Int,
 
   override def appended[B >: A](elem: B): NVector[B] = {
     if(suffix1.length < WIDTH)
-      new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyAppend1(suffix1, elem), length+1)
+      new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length+1)
     else if(suffix2.length < WIDTH-1)
       new NVector3(prefix1, len1, prefix2, len12, data3, copyAppend(suffix2, suffix1), wrap1(elem), length+1)
     else if(data3.length < WIDTH-2)
@@ -409,11 +411,11 @@ private final class NVector3[+A](prefix1: Array[Any], len1: Int,
   private[collection] def toDebugString: String = {
     val sb = new mutable.StringBuilder()
     sb.append(s"NVector3(len1=$len1, len12=$len12, length=$length)\n")
-    logArray(sb, prefix1.asInstanceOf[Array[AnyRef]], "  ", "prefix1: ")
+    logArray(sb, prefix1, "  ", "prefix1: ")
     logArray(sb, prefix2, "  ", "prefix2: ")
     logArray(sb, data3, "  ", "data3: ")
     logArray(sb, suffix2, "  ", "suffix2: ")
-    logArray(sb, suffix1.asInstanceOf[Array[AnyRef]], "  ", "suffix1: ")
+    logArray(sb, suffix1, "  ", "suffix1: ")
     sb.result()
   }
 
@@ -436,20 +438,20 @@ private final class NVector3[+A](prefix1: Array[Any], len1: Int,
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
     val b = new NVectorSliceBuilder(lo, hi)
-    b.consider(1, prefix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, data3)
     b.consider(2, suffix2)
-    b.consider(1, suffix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, suffix1)
     b.result()
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector3(copyDropHead1(prefix1), len1-1, prefix2, len12-1, data3, suffix2, suffix1, length-1)
+    if(len1 > 1) new NVector3(copyDropHead(prefix1), len1-1, prefix2, len12-1, data3, suffix2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyDropLast1(suffix1), length-1)
+    if(suffix1.length > 1) new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyDropLast(suffix1), length-1)
     else slice0(0, length-1)
 }
 
@@ -467,11 +469,11 @@ private final class NVector3[+A](prefix1: Array[Any], len1: Int,
   * @param suffix1 The level 1 suffix
   * @param length The actual number of elements in the vector
   */
-private final class NVector4[+A](prefix1: Array[Any], len1: Int,
-                                 prefix2: Array[Array[Any]], len12: Int,
-                                 prefix3: Array[Array[Array[Any]]], len123: Int,
-                                 data4: Array[Array[Array[Array[Any]]]],
-                                 suffix3: Array[Array[Array[Any]]], suffix2: Array[Array[Any]], suffix1: Array[Any],
+private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
+                                 prefix2: Arr2, len12: Int,
+                                 prefix3: Arr3, len123: Int,
+                                 data4: Arr4,
+                                 suffix3: Arr3, suffix2: Arr2, suffix1: Array[AnyRef],
                                  val length: Int) extends NVector[A] {
   import NVectorStatics._
 
@@ -525,7 +527,7 @@ private final class NVector4[+A](prefix1: Array[Any], len1: Int,
 
   override def appended[B >: A](elem: B): NVector[B] = {
     if(suffix1.length < WIDTH)
-      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyAppend1(suffix1, elem), length+1)
+      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length+1)
     else if(suffix2.length < WIDTH-1)
       new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, copyAppend(suffix2, suffix1), wrap1(elem), length+1)
     else if(suffix3.length < WIDTH-1)
@@ -560,13 +562,13 @@ private final class NVector4[+A](prefix1: Array[Any], len1: Int,
   private[collection] def toDebugString: String = {
     val sb = new mutable.StringBuilder()
     sb.append(s"NVector4(len1=$len1, len12=$len12, len123=$len123, length=$length)\n")
-    logArray(sb, prefix1.asInstanceOf[Array[AnyRef]], "  ", "prefix1: ")
+    logArray(sb, prefix1, "  ", "prefix1: ")
     logArray(sb, prefix2, "  ", "prefix2: ")
     logArray(sb, prefix3, "  ", "prefix3: ")
     logArray(sb, data4, "  ", "data4: ")
     logArray(sb, suffix3, "  ", "suffix3: ")
     logArray(sb, suffix2, "  ", "suffix2: ")
-    logArray(sb, suffix1.asInstanceOf[Array[AnyRef]], "  ", "suffix1: ")
+    logArray(sb, suffix1, "  ", "suffix1: ")
     sb.result()
   }
 
@@ -587,22 +589,22 @@ private final class NVector4[+A](prefix1: Array[Any], len1: Int,
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
     val b = new NVectorSliceBuilder(lo, hi)
-    b.consider(1, prefix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, prefix3)
     b.consider(4, data4)
     b.consider(3, suffix3)
     b.consider(2, suffix2)
-    b.consider(1, suffix1.asInstanceOf[Array[AnyRef]])
+    b.consider(1, suffix1)
     b.result()
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector4(copyDropHead1(prefix1), len1-1, prefix2, len12-1, prefix3, len123-1, data4, suffix3, suffix2, suffix1, length-1)
+    if(len1 > 1) new NVector4(copyDropHead(prefix1), len1-1, prefix2, len12-1, prefix3, len123-1, data4, suffix3, suffix2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyDropLast1(suffix1), length-1)
+    if(suffix1.length > 1) new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyDropLast(suffix1), length-1)
     else slice0(0, length-1)
 }
 
@@ -610,7 +612,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   //println(s"***** NVectorSliceBuilder($lo, $hi)")
   import NVectorStatics._
 
-  private[this] val slices = new Array[Array[Any]](11)
+  private[this] val slices = new Array[Array[AnyRef]](11)
   private[this] var len, pos, maxDim = 0
 
   @inline private[this] def prefixIdx(n: Int) = n-1
@@ -629,7 +631,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   private[this] def addSlice[T <: AnyRef](n: Int, a: Array[T], lo: Int, hi: Int): Unit = {
     //println(s"*****     addSlice($n, /${a.length}, $lo, $hi)")
     if(n == 1) {
-      add(1, copyOrUse(a.asInstanceOf[Array[AnyRef]], lo, hi))
+      add(1, copyOrUse(a, lo, hi))
     } else {
       val bitsN = BITS * (n-1)
       var loN = lo >> bitsN
@@ -645,8 +647,8 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         if(hiRest == 0) {
           add(n, copyOrUse(a, loN, hiN))
         } else {
-          if(hiN-1 > loN) add(n, copyOrUse(a, loN, hiN-1))
-          addSlice(n-1, a(hiN-1).asInstanceOf[Array[AnyRef]], 0, hiRest)
+          if(hiN > loN) add(n, copyOrUse(a, loN, hiN))
+          addSlice(n-1, a(hiN).asInstanceOf[Array[AnyRef]], 0, hiRest)
         }
       } else {
         addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, 1 << bitsN)
@@ -664,7 +666,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     val idx =
       if(n <= maxDim) suffixIdx(n)
       else { maxDim = n; prefixIdx(n) }
-    slices(idx) = a.asInstanceOf[Array[Any]]
+    slices(idx) = a.asInstanceOf[Array[AnyRef]]
     len += (a.length * (1 << (BITS*(n-1))))
   }
 
@@ -674,16 +676,16 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       else {
         val prefix1 = slices(prefixIdx(1))
         val suffix1 = slices(suffixIdx(1))
-        val a: Array[Any] =
+        val a: Arr1 =
           if(prefix1 ne null) {
-            if(suffix1 ne null) concatArrays(prefix1.asInstanceOf[Array[AnyRef]], suffix1.asInstanceOf[Array[AnyRef]]).asInstanceOf[Array[Any]]
+            if(suffix1 ne null) concatArrays(prefix1, suffix1)
             else prefix1
           } else if(suffix1 ne null) suffix1
           else {
-            val prefix2 = slices(prefixIdx(2)).asInstanceOf[Array[Array[Any]]]
+            val prefix2 = slices(prefixIdx(2)).asInstanceOf[Arr2]
             if(prefix2 ne null) prefix2(0)
             else {
-              val suffix2 = slices(suffixIdx(2)).asInstanceOf[Array[Array[Any]]]
+              val suffix2 = slices(suffixIdx(2)).asInstanceOf[Arr2]
               suffix2(0)
             }
           }
@@ -698,7 +700,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         val suf = slices(suffixIdx(maxDim))
         if((pre ne null) && (suf ne null)) {
           if(pre.length + suf.length <= WIDTH-2) {
-            slices(prefixIdx(maxDim)) = concatArrays(pre.asInstanceOf[Array[AnyRef]], suf.asInstanceOf[Array[AnyRef]]).asInstanceOf[Array[Any]]
+            slices(prefixIdx(maxDim)) = concatArrays(pre, suf)
             slices(suffixIdx(maxDim)) = null
           } else resultDim += 1
         } else {
@@ -707,8 +709,8 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           if(one.length > WIDTH-2) resultDim += 1
         }
       }
-      val prefix1 = slices(prefixIdx(1)).asInstanceOf[Array[Any]]
-      val suffix1 = slices(suffixIdx(1)).asInstanceOf[Array[Any]]
+      val prefix1 = slices(prefixIdx(1))
+      val suffix1 = slices(suffixIdx(1))
       val len1 = prefix1.length
       val res = (resultDim: @switch) match {
         case 2 =>
@@ -763,14 +765,14 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         slices(suffixIdx(n)) = null
       } else {
         balancePrefix(n+1)
-        val preN1 = slices(prefixIdx(n+1)).asInstanceOf[Array[Array[Any]]]
+        val preN1 = slices(prefixIdx(n+1)).asInstanceOf[Array[Array[AnyRef]]]
         //assert(preN1 ne null)
         slices(prefixIdx(n)) = preN1(0)
         if(preN1.length == 1) {
           slices(prefixIdx(n+1)) = null
           if((maxDim == n+1) && (slices(suffixIdx(n+1)) eq null)) maxDim = n
         } else {
-          slices(prefixIdx(n+1)) = Arrays.copyOfRange(preN1.asInstanceOf[Array[AnyRef]], 1, preN1.length).asInstanceOf[Array[Any]]
+          slices(prefixIdx(n+1)) = copyOfRange(preN1, 1, preN1.length).asInstanceOf[Array[AnyRef]]
         }
       }
     }
@@ -783,14 +785,14 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         slices(prefixIdx(n)) = null
       } else {
         balanceSuffix(n+1)
-        val sufN1 = slices(suffixIdx(n+1)).asInstanceOf[Array[Array[Any]]]
+        val sufN1 = slices(suffixIdx(n+1)).asInstanceOf[Array[Array[AnyRef]]]
         //assert(sufN1 ne null, s"n=$n, maxDim=$maxDim, slices=${slices.mkString(",")}")
         slices(suffixIdx(n)) = sufN1(sufN1.length-1)
         if(sufN1.length == 1) {
           slices(suffixIdx(n+1)) = null
           if((maxDim == n+1) && (slices(prefixIdx(n+1)) eq null)) maxDim = n
         } else {
-          slices(suffixIdx(n+1)) = Arrays.copyOfRange(sufN1.asInstanceOf[Array[AnyRef]], 0, sufN1.length-1).asInstanceOf[Array[Any]]
+          slices(suffixIdx(n+1)) = copyOfRange(sufN1, 0, sufN1.length-1).asInstanceOf[Array[AnyRef]]
         }
       }
     }
@@ -804,20 +806,19 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   }
 
   @inline private[this] def copyOrUse[T <: AnyRef](a: Array[T], start: Int, end: Int): Array[T] =
-    if(start == 0 && end == a.length) a else Arrays.copyOfRange[T](a, start, end)
+    if(start == 0 && end == a.length) a else copyOfRange[T](a, start, end)
 }
 
 private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   import NVectorStatics._
 
-  private[this] var a6: Array[Array[Array[Array[Array[Array[Any]]]]]] = _
-  private[this] var a5: Array[Array[Array[Array[Array[Any]]]]] = _
-  private[this] var a4: Array[Array[Array[Array[Any]]]] = _
-  private[this] var a3: Array[Array[Array[Any]]] = _
-  private[this] var a2: Array[Array[Any]] = _
-  private[this] var a1: Array[Any] = _
-  private[this] var len: Int = 0
-  private[this] var depth: Int = 0
+  private[this] var a6: Arr6 = _
+  private[this] var a5: Arr5 = _
+  private[this] var a4: Arr4 = _
+  private[this] var a3: Arr3 = _
+  private[this] var a2: Arr2 = _
+  private[this] var a1: Arr1 = _
+  private[this] var len, depth: Int = 0
 
   override def knownSize: Int = len
 
@@ -835,7 +836,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   def initSparse(size: Int, elem: A): Unit = {
     len = size
     a1 = new Array(WIDTH)
-    Arrays.fill(a1.asInstanceOf[Array[AnyRef]], elem.asInstanceOf[AnyRef])
+    Arrays.fill(a1, elem)
     if(size > WIDTH) {
       a2 = new Array(WIDTH)
       Arrays.fill(a2.asInstanceOf[Array[AnyRef]], a1)
@@ -862,35 +863,16 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   def addOne(elem: A): this.type = {
     val i1 = len & MASK
     if(i1 == 0) advance()
-    a1(i1) = elem
+    a1(i1) = elem.asInstanceOf[AnyRef]
     len += 1
     this
   }
 
-  private[this] def shift2(i2: Int): Unit = {
-    a1 = new Array(WIDTH)
-    a2(i2) = a1
-  }
-
-  private[this] def shift3(i3: Int): Unit = {
-    a2 = new Array(WIDTH)
-    a3(i3) = a2
-  }
-
-  private[this] def shift4(i4: Int): Unit = {
-    a3 = new Array(WIDTH)
-    a4(i4) = a3
-  }
-
-  private[this] def shift5(i5: Int): Unit = {
-    a4 = new Array(WIDTH)
-    a5(i5) = a4
-  }
-
-  private[this] def shift6(i6: Int): Unit = {
-    a5 = new Array(WIDTH)
-    a6(i6) = a5
-  }
+  private[this] def shift2(i2: Int): Unit = { a1 = new Array(WIDTH); a2(i2) = a1 }
+  private[this] def shift3(i3: Int): Unit = { a2 = new Array(WIDTH); a3(i3) = a2 }
+  private[this] def shift4(i4: Int): Unit = { a3 = new Array(WIDTH); a4(i4) = a3 }
+  private[this] def shift5(i5: Int): Unit = { a4 = new Array(WIDTH); a5(i5) = a4 }
+  private[this] def shift6(i6: Int): Unit = { a5 = new Array(WIDTH); a6(i6) = a5 }
 
   private[this] def advance(): Unit = (depth: @switch) match {
     case 0 =>
@@ -1025,7 +1007,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     } else if(len <= WIDTH2) {
       val i1 = (len-1) & MASK
       val i2 = (len-1) >> BITS
-      val data = Arrays.copyOfRange(a2, 1, i2)
+      val data = copyOfRange(a2, 1, i2)
       val prefix1 = a2(0)
       val suffix1 = copyIfDifferentSize(a2(i2), i1+1)
       new NVector2(prefix1, WIDTH, data, suffix1, len)
@@ -1033,10 +1015,10 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val i1 = (len-1) & MASK
       val i2 = ((len-1) >> BITS) & MASK
       val i3 = ((len-1) >> BITS2)
-      val data = Arrays.copyOfRange(a3, 1, i3)
-      val prefix2 = Arrays.copyOfRange(a3(0), 1, WIDTH)
+      val data = copyOfRange(a3, 1, i3)
+      val prefix2 = copyOfRange(a3(0), 1, WIDTH)
       val prefix1 = a3(0)(0)
-      val suffix2 = Arrays.copyOf(a3(i3), i2)
+      val suffix2 = copyOf(a3(i3), i2)
       val suffix1 = copyIfDifferentSize(a3(i3)(i2), i1+1)
       new NVector3(prefix1, WIDTH, prefix2, WIDTH2, data, suffix2, suffix1, len)
     } else if(len <= WIDTH4) {
@@ -1044,12 +1026,12 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val i2 = ((len-1) >> BITS) & MASK
       val i3 = ((len-1) >> BITS2) & MASK
       val i4 = ((len-1) >> BITS3)
-      val data = Arrays.copyOfRange(a4, 1, i4)
-      val prefix3 = Arrays.copyOfRange(a4(0), 1, WIDTH)
-      val prefix2 = Arrays.copyOfRange(a4(0)(0), 1, WIDTH)
+      val data = copyOfRange(a4, 1, i4)
+      val prefix3 = copyOfRange(a4(0), 1, WIDTH)
+      val prefix2 = copyOfRange(a4(0)(0), 1, WIDTH)
       val prefix1 = a4(0)(0)(0)
-      val suffix3 = Arrays.copyOf(a4(i4), i3)
-      val suffix2 = Arrays.copyOf(a4(i4)(i3), i2)
+      val suffix3 = copyOf(a4(i4), i3)
+      val suffix2 = copyOf(a4(i4)(i3), i2)
       val suffix1 = copyIfDifferentSize(a4(i4)(i3)(i2), i1+1)
       new NVector4(prefix1, WIDTH, prefix2, WIDTH2, prefix3, WIDTH3, data, suffix3, suffix2, suffix1, len)
     } else ???
@@ -1069,7 +1051,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     logArray(sb, a4, "  ", "a4: ", a5, "a5")
     logArray(sb, a3, "  ", "a3: ", a4, "a4")
     logArray(sb, a2, "  ", "a2: ", a3, "a3")
-    logArray(sb, a1.asInstanceOf[Array[AnyRef]], "  ", "a1: ", a2.asInstanceOf[Array[Array[AnyRef]]], "a2")
+    logArray(sb, a1, "  ", "a1: ", a2, "a2")
     sb.result()
   }
 }
@@ -1089,25 +1071,23 @@ private[immutable] object NVectorStatics {
   final val WIDTH5 = 1 << BITS5
   final val LASTWIDTH = WIDTH << 1 // 1 extra bit in the last level to go up to Int.MaxValue (2^31-1) instead of 2^30
 
-  @inline final def copyOf(a: Array[Any], len: Int): Array[Any] =
-    Arrays.copyOf(a.asInstanceOf[Array[AnyRef]], len).asInstanceOf[Array[Any]]
+  type Arr1 = Array[AnyRef]
+  type Arr2 = Array[Array[AnyRef]]
+  type Arr3 = Array[Array[Array[AnyRef]]]
+  type Arr4 = Array[Array[Array[Array[AnyRef]]]]
+  type Arr5 = Array[Array[Array[Array[Array[AnyRef]]]]]
+  type Arr6 = Array[Array[Array[Array[Array[Array[AnyRef]]]]]]
 
-  @inline final def copyAppend1(a: Array[Any], elem: Any): Array[Any] = {
-    val ac = Arrays.copyOf(a.asInstanceOf[Array[AnyRef]], a.length).asInstanceOf[Array[Any]]
+  final def copyAppend[T <: AnyRef](a: Array[T], elem: T): Array[T] = {
+    val ac = copyOf(a, a.length)
     ac(ac.length-1) = elem
     ac
   }
 
-  @inline final def copyAppend[T <: AnyRef](a: Array[T], elem: T): Array[T] = {
-    val ac = Arrays.copyOf(a, a.length)
-    ac(ac.length-1) = elem
-    ac
-  }
-
-  final def copyPrepend1(elem: Any, a: Array[Any]): Array[Any] = {
-    val ac = new Array[Any](a.length+1)
+  final def copyPrepend1(elem: Any, a: Arr1): Arr1 = {
+    val ac = new Arr1(a.length+1)
     System.arraycopy(a, 0, ac, 1, a.length)
-    ac(0) = elem
+    ac(0) = elem.asInstanceOf[AnyRef]
     ac
   }
 
@@ -1118,88 +1098,60 @@ private[immutable] object NVectorStatics {
     ac
   }
 
-  @inline final def copyDropHead1(a: Array[Any]): Array[Any] =
-    Arrays.copyOfRange(a.asInstanceOf[Array[AnyRef]], 1, a.length).asInstanceOf[Array[Any]]
+  @inline final def copyDropHead[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 1, a.length)
 
-  @inline final def copyDropHead[T <: AnyRef](a: Array[T]): Array[T] =
-    Arrays.copyOfRange[T](a, 1, a.length)
+  @inline final def copyDropLast[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 0, a.length-1)
 
-  @inline final def copyDropLast1(a: Array[Any]): Array[Any] =
-    Arrays.copyOfRange(a.asInstanceOf[Array[AnyRef]], 0, a.length-1).asInstanceOf[Array[Any]]
+  @inline final def copyIfDifferentSize[T <: AnyRef](a: Array[T], len: Int): Array[T] =
+    if(a.length == len) a else copyOf[T](a, len)
 
-  @inline final def copyDropLast[T <: AnyRef](a: Array[T]): Array[T] =
-    Arrays.copyOfRange[T](a, 0, a.length-1)
+  final val empty1: Arr1 = new Array(0)
+  final val empty2: Arr2 = new Array(0)
+  final val empty3: Arr3 = new Array(0)
+  final val empty4: Arr4 = new Array(0)
 
-  @inline final def copyIfDifferentSize(a: Array[Any], len: Int): Array[Any] =
-    if(a.length == len) a
-    else Arrays.copyOf(a.asInstanceOf[Array[AnyRef]], len).asInstanceOf[Array[Any]]
+  @inline final def wrap1(x: Any ): Arr1 = { val a = new Arr1(1); a(0) = x.asInstanceOf[AnyRef]; a }
+  @inline final def wrap2(x: Arr1): Arr2 = { val a = new Arr2(1); a(0) = x; a }
+  @inline final def wrap3(x: Arr2): Arr3 = { val a = new Arr3(1); a(0) = x; a }
+  @inline final def wrap4(x: Arr3): Arr4 = { val a = new Arr4(1); a(0) = x; a }
 
-  final val empty1: Array[Any] = new Array(0)
-  final val empty2: Array[Array[Any]] = new Array(0)
-  final val empty3: Array[Array[Array[Any]]] = new Array(0)
-  final val empty4: Array[Array[Array[Array[Any]]]] = new Array(0)
-
-  @inline final def wrap1(x: Any): Array[Any] = {
-    val a = new Array[Any](1)
-    a(0) = x
-    a
-  }
-
-  @inline final def wrap2(x: Array[Any]): Array[Array[Any]] = {
-    val a = new Array[Array[Any]](1)
-    a(0) = x
-    a
-  }
-
-  @inline final def wrap3(x: Array[Array[Any]]): Array[Array[Array[Any]]] = {
-    val a = new Array[Array[Array[Any]]](1)
-    a(0) = x
-    a
-  }
-
-  @inline final def wrap4(x: Array[Array[Array[Any]]]): Array[Array[Array[Array[Any]]]] = {
-    val a = new Array[Array[Array[Array[Any]]]](1)
-    a(0) = x
-    a
-  }
-
-  @inline final def copyUpdate(a1: Array[Any], idx1: Int, elem: Any): Array[Any] = {
+  @inline final def copyUpdate(a1: Arr1, idx1: Int, elem: Any): Arr1 = {
     val a1c = a1.clone()
-    a1c(idx1) = elem
+    a1c(idx1) = elem.asInstanceOf[AnyRef]
     a1c
   }
 
-  @inline final def copyUpdate(a2: Array[Array[Any]], idx2: Int, elem: Array[Any]): Array[Array[Any]] = {
+  @inline final def copyUpdate(a2: Arr2, idx2: Int, elem: Arr1): Arr2 = {
     val a2c = a2.clone()
     a2c(idx2) = elem
     a2c
   }
 
-  @inline final def copyUpdate(a2: Array[Array[Any]], idx2: Int, idx1: Int, elem: Any): Array[Array[Any]] = {
+  @inline final def copyUpdate(a2: Arr2, idx2: Int, idx1: Int, elem: Any): Arr2 = {
     val a2c = a2.clone()
     a2c(idx2) = copyUpdate(a2c(idx2), idx1, elem)
     a2c
   }
 
-  @inline final def copyUpdate(a3: Array[Array[Array[Any]]], idx3: Int, idx2: Int, idx1: Int, elem: Any): Array[Array[Array[Any]]] = {
+  @inline final def copyUpdate(a3: Arr3, idx3: Int, idx2: Int, idx1: Int, elem: Any): Arr3 = {
     val a3c = a3.clone()
     a3c(idx3) = copyUpdate(a3c(idx3), idx2, idx1, elem)
     a3c
   }
 
-  @inline final def copyUpdate(a4: Array[Array[Array[Array[Any]]]], idx4: Int, idx3: Int, idx2: Int, idx1: Int, elem: Any): Array[Array[Array[Array[Any]]]] = {
+  @inline final def copyUpdate(a4: Arr4, idx4: Int, idx3: Int, idx2: Int, idx1: Int, elem: Any): Arr4 = {
     val a4c = a4.clone()
     a4c(idx4) = copyUpdate(a4c(idx4), idx3, idx2, idx1, elem)
     a4c
   }
 
   @inline final def concatArrays[T <: AnyRef](a: Array[T], b: Array[T]): Array[T] = {
-    val dest = Arrays.copyOf[T](a, a.length+b.length)
+    val dest = copyOf[T](a, a.length+b.length)
     System.arraycopy(b, 0, dest, a.length, b.length)
     dest
   }
 
-  @inline final def foreachElem[A, U](a1: Array[Any], f: A => U): Unit = {
+  @inline final def foreachElem[A, U](a1: Arr1, f: A => U): Unit = {
     var i1 = 0
     while(i1 < a1.length) {
       f(a1(i1).asInstanceOf[A])
@@ -1207,7 +1159,7 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  final def foreachElem[A, U](a2: Array[Array[Any]], f: A => U): Unit = {
+  final def foreachElem[A, U](a2: Arr2, f: A => U): Unit = {
     var i2 = 0
     while(i2 < a2.length) {
       foreachElem(a2(i2), f)
@@ -1215,7 +1167,7 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  final def foreachElem[A, U](a3: Array[Array[Array[Any]]], f: A => U): Unit = {
+  final def foreachElem[A, U](a3: Arr3, f: A => U): Unit = {
     var i3 = 0
     while(i3 < a3.length) {
       foreachElem(a3(i3), f)
@@ -1223,7 +1175,7 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  final def foreachElem[A, U](a4: Array[Array[Array[Array[Any]]]], f: A => U): Unit = {
+  final def foreachElem[A, U](a4: Arr4, f: A => U): Unit = {
     var i4 = 0
     while(i4 < a4.length) {
       foreachElem(a4(i4), f)
@@ -1233,7 +1185,7 @@ private[immutable] object NVectorStatics {
 
   final def foreachElem[A, U, T <: AnyRef](n: Int, a: Array[T], f: A => U): Unit = {
     var i = 0
-    if(n == 1) foreachElem(a.asInstanceOf[Array[Any]], f)
+    if(n == 1) foreachElem(a.asInstanceOf[Array[AnyRef]], f)
     else {
       while(i < a.length) {
         foreachElem(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
@@ -1242,8 +1194,8 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  final def mapElems1[A, B](a: Array[Any], f: A => B): Array[Any] = {
-    val ac: Array[Any] = new Array(a.length)
+  final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
+    val ac: Arr1 = new Array(a.length)
     var i = 0
     while(i < a.length) {
       val v1 = a(i).asInstanceOf[AnyRef]
@@ -1256,7 +1208,7 @@ private[immutable] object NVectorStatics {
 
   final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
     if(n == 1)
-      mapElems1[A, B](a.asInstanceOf[Array[Any]], f).asInstanceOf[Array[T]]
+      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
     else {
       val ac: Array[AnyRef] = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
       var i = 0
@@ -1271,8 +1223,8 @@ private[immutable] object NVectorStatics {
   }
 
   /*
-  final def mapElems1[A, B](a: Array[Any], f: A => B): Array[Any] = {
-    var ac: Array[Any] = null
+  final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
+    var ac: Arr1 = null
     var i = 0
     while(i < a.length) {
       val v1 = a(i).asInstanceOf[AnyRef]
@@ -1295,7 +1247,7 @@ private[immutable] object NVectorStatics {
 
   final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
     if(n == 1)
-      mapElems1[A, B](a.asInstanceOf[Array[Any]], f).asInstanceOf[Array[T]]
+      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
     else {
       var ac: Array[AnyRef] = null
       var i = 0
@@ -1391,12 +1343,12 @@ private[immutable] object NVectorStatics {
   }
 }
 
-private[immutable] final class NVector2Iterator[A](a2: Array[Array[Any]], startlength: Int) extends Iterator[A] {
+private[immutable] final class NVector2Iterator[A](a2: Arr2, startlength: Int) extends Iterator[A] {
   import NVectorStatics._
 
   private[this] var pos1, pos2 = 0
   private[this] var rest = startlength
-  private[this] var a1: Array[Any] = a2(0)
+  private[this] var a1: Arr1 = a2(0)
 
   override def knownSize = rest
 
