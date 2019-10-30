@@ -19,7 +19,7 @@ import scala.collection.generic.DefaultSerializable
 import scala.reflect.ClassTag
 import java.util.Arrays
 import java.util.Arrays.{copyOf, copyOfRange}
-import java.lang.Math.{max => mmax, min => mmin}
+import java.lang.Math.{max => mmax, min => mmin, abs}
 
 import NVectorStatics.{Arr1, Arr2, Arr3, Arr4, Arr5, Arr6}
 
@@ -121,6 +121,12 @@ sealed abstract class NVector[+A]
     else if(newlen <= 0) NVector0
     else slice0(lo, hi)
   }
+
+  protected[immutable] def vectorSliceCount: Int
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef]
+  protected[immutable] def vectorSliceDim(idx: Int): Int
+
+  override def iterator: Iterator[A] = new NVectorIterator(this)
 }
 
 /** Empty vector */
@@ -154,6 +160,10 @@ private final object NVector0 extends NVector[Nothing] {
   override def init: NVector[Nothing] = throw new UnsupportedOperationException("empty.init")
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[Nothing] = this
+
+  protected[immutable] def vectorSliceCount: Int = 0
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = null
+  protected[immutable] def vectorSliceDim(idx: Int): Int = -1
 }
 
 /** Flat ArraySeq-like structure.
@@ -211,11 +221,15 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
 
   override def tail: NVector[A] =
     if(data1.length == 1) NVector0
-    else new NVector1(copyDropHead(data1))
+    else new NVector1(copyTail(data1))
 
   override def init: NVector[A] =
     if(data1.length == 1) NVector0
-    else new NVector1(copyDropLast(data1))
+    else new NVector1(copyInit(data1))
+
+  protected[immutable] def vectorSliceCount: Int = 1
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = data1
+  protected[immutable] def vectorSliceDim(idx: Int): Int = 1
 }
 
 /** 2-level radix tree with fingers at both ends.
@@ -276,6 +290,8 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
       new NVector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length+1)
   }
 
+  //override def iterator: Iterator[A] = new NVectorIterator(length, Array[AnyRef](prefix1, data2, suffix1))
+
   override def foreach[U](f: A => U): Unit = {
     foreachElem(prefix1, f)
     foreachElem(data2, f)
@@ -314,12 +330,20 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector2(copyDropHead(prefix1), len1-1, data2, suffix1, length-1)
+    if(len1 > 1) new NVector2(copyTail(prefix1), len1-1, data2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector2(prefix1, len1, data2, copyDropLast(suffix1), length-1)
+    if(suffix1.length > 1) new NVector2(prefix1, len1, data2, copyInit(suffix1), length-1)
     else slice0(0, length-1)
+
+  protected[immutable] def vectorSliceCount: Int = 3
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = (idx: @switch) match {
+    case 0 => prefix1
+    case 1 => data2
+    case 2 => suffix1
+  }
+  protected[immutable] def vectorSliceDim(idx: Int): Int = 2-abs(idx-1)
 }
 
 /** 3-level radix tree with fingers at both ends. Max size is WIDTH for prefix1 and suffix1, WIDTH-1 for
@@ -400,6 +424,8 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
       new NVector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length+1)
   }
 
+  //override def iterator: Iterator[A] = new NVectorIterator(length, Array[AnyRef](prefix1, prefix2, data3, suffix2, suffix1))
+
   override def foreach[U](f: A => U): Unit = {
     foreachElem(prefix1, f)
     foreachElem(prefix2, f)
@@ -447,12 +473,22 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector3(copyDropHead(prefix1), len1-1, prefix2, len12-1, data3, suffix2, suffix1, length-1)
+    if(len1 > 1) new NVector3(copyTail(prefix1), len1-1, prefix2, len12-1, data3, suffix2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyDropLast(suffix1), length-1)
+    if(suffix1.length > 1) new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyInit(suffix1), length-1)
     else slice0(0, length-1)
+
+  protected[immutable] def vectorSliceCount: Int = 5
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = (idx: @switch) match {
+    case 0 => prefix1
+    case 1 => prefix2
+    case 2 => data3
+    case 3 => suffix2
+    case 4 => suffix1
+  }
+  protected[immutable] def vectorSliceDim(idx: Int): Int = 3-abs(idx-2)
 }
 
 /** 4-level radix tree with fingers at both ends.
@@ -549,6 +585,8 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     else ???
   }
 
+  //override def iterator: Iterator[A] = new NVectorIterator(length, Array[AnyRef](prefix1, prefix2, prefix3, data4, suffix3, suffix2, suffix1))
+
   override def foreach[U](f: A => U): Unit = {
     foreachElem(prefix1, f)
     foreachElem(prefix2, f)
@@ -600,12 +638,24 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
   }
 
   override def tail: NVector[A] =
-    if(len1 > 1) new NVector4(copyDropHead(prefix1), len1-1, prefix2, len12-1, prefix3, len123-1, data4, suffix3, suffix2, suffix1, length-1)
+    if(len1 > 1) new NVector4(copyTail(prefix1), len1-1, prefix2, len12-1, prefix3, len123-1, data4, suffix3, suffix2, suffix1, length-1)
     else slice0(1, length)
 
   override def init: NVector[A] =
-    if(suffix1.length > 1) new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyDropLast(suffix1), length-1)
+    if(suffix1.length > 1) new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyInit(suffix1), length-1)
     else slice0(0, length-1)
+
+  protected[immutable] def vectorSliceCount: Int = 7
+  protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = (idx: @switch) match {
+    case 0 => prefix1
+    case 1 => prefix2
+    case 2 => prefix3
+    case 3 => data4
+    case 4 => suffix3
+    case 5 => suffix2
+    case 6 => suffix1
+  }
+  protected[immutable] def vectorSliceDim(idx: Int): Int = 4-abs(idx-3)
 }
 
 private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
@@ -705,7 +755,6 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           } else resultDim += 1
         } else {
           val one = if(pre ne null) pre else suf
-          //assert(one ne null, "one should not be null: "+toDebugString)
           if(one.length > WIDTH-2) resultDim += 1
         }
       }
@@ -1098,9 +1147,9 @@ private[immutable] object NVectorStatics {
     ac
   }
 
-  @inline final def copyDropHead[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 1, a.length)
+  @inline final def copyTail[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 1, a.length)
 
-  @inline final def copyDropLast[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 0, a.length-1)
+  @inline final def copyInit[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 0, a.length-1)
 
   @inline final def copyIfDifferentSize[T <: AnyRef](a: Array[T], len: Int): Array[T] =
     if(a.length == len) a else copyOf[T](a, len)
@@ -1343,60 +1392,52 @@ private[immutable] object NVectorStatics {
   }
 }
 
-private[immutable] final class NVector2Iterator[A](a2: Arr2, startlength: Int) extends Iterator[A] {
+private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] {
   import NVectorStatics._
 
-  private[this] var pos1, pos2 = 0
-  private[this] var rest = startlength
-  private[this] var a1: Arr1 = a2(0)
+  private[this] val startlength = v.length
+  private[this] var a1: Arr1 = _
+  private[this] var slice: Array[_ <: AnyRef] = _
+  private[this] var sliceIdx, pos1, sliceDim = -1
+  private[this] var pos, sliceStart, sliceLength = 0
 
-  override def knownSize = rest
+  @inline override def knownSize = startlength - pos
 
-  def hasNext: Boolean = rest > 0
+  @inline def hasNext: Boolean = startlength > pos
 
-  private[this] def advance(): Unit = {
-    if(rest > 0) {
-      pos2 += 1
-      a1 = a2(pos2)
-      pos1 = 0
+  private[this] def advanceSlice(): Unit = {
+    slice = null
+    while((slice eq null) || slice.length == 0) {
+      sliceIdx += 1
+      slice = v.vectorSlice(sliceIdx)
     }
+    sliceStart = pos
+    sliceDim = v.vectorSliceDim(sliceIdx)
+    sliceLength = slice.length * (1 << (BITS*(sliceDim-1)))
+  }
+
+  private[this] def advanceA1(): Unit = {
+    if(pos == sliceStart + sliceLength) advanceSlice()
+    val io = pos - sliceStart
+    (sliceDim: @switch) match {
+      case 1 => a1 = slice.asInstanceOf[Arr1]
+      case 2 => a1 = slice.asInstanceOf[Arr2](io >> BITS)
+      case 3 => a1 = slice.asInstanceOf[Arr3](io >> BITS2)((io >> BITS) & MASK)
+      case 4 => a1 = slice.asInstanceOf[Arr4](io >> BITS3)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+      case 5 => a1 = slice.asInstanceOf[Arr5](io >> BITS4)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+      case 6 => a1 = slice.asInstanceOf[Arr6](io >> BITS5)((io >> BITS4) & MASK)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+    }
+    pos1 = 0
   }
 
   def next(): A = {
-    if(rest > 0) {
+    if(hasNext) {
+      if(a1 eq null) advanceA1()
       val r = a1(pos1)
       pos1 += 1
-      rest -= 1
-      if(pos1 == a1.length) {
-        if(rest > 0) {
-          pos2 += 1
-          a1 = a2(pos2)
-          pos1 = 0
-        }
-      }
+      if(pos1 == a1.length) a1 = null
+      pos += 1
       r.asInstanceOf[A]
     } else Iterator.empty.next()
-  }
-
-  private[this] def focus(): Unit = {
-    val index = startlength - rest
-    val len0 = a2(0).length
-    if(index < len0) {
-      pos2 = 0
-      pos1 = index
-    } else {
-      val io = index + WIDTH - len0
-      pos2 = io >> BITS
-      pos1 = io & MASK
-    }
-    a1 = a2(pos2)
-  }
-
-  override def drop(n: Int): Iterator[A] = {
-    if(n > 0) {
-      rest -= Math.min(n, rest)
-      focus()
-    }
-    this
   }
 }
