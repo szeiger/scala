@@ -1395,17 +1395,21 @@ private[immutable] object NVectorStatics {
 private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] {
   import NVectorStatics._
 
-  private[this] val startlength = v.length
+  private[this] val totalLength = v.length
+  private[this] var len1 = totalLength // length relative to i1
   private[this] var a1: Arr1 = _
   private[this] var slice: Array[_ <: AnyRef] = _
-  private[this] var sliceIdx, pos1, sliceDim = -1
-  private[this] var pos, sliceStart, sliceLength = 0
+  private[this] var sliceIdx, sliceDim = -1
+  private[this] var sliceStart, sliceEnd, i1 = 0
 
-  @inline override def knownSize = startlength - pos
+  advanceA1()
 
-  @inline def hasNext: Boolean = startlength > pos
+  @inline override def knownSize = len1 - i1
 
-  private[this] def advanceSlice(): Unit = {
+  @inline def hasNext: Boolean = len1 > i1
+
+  private[this] def advanceSlice(pos: Int): Unit = {
+    if(!hasNext) Iterator.empty.next()
     slice = null
     while((slice eq null) || slice.length == 0) {
       sliceIdx += 1
@@ -1413,31 +1417,29 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
     }
     sliceStart = pos
     sliceDim = v.vectorSliceDim(sliceIdx)
-    sliceLength = slice.length * (1 << (BITS*(sliceDim-1)))
+    sliceEnd = sliceStart + slice.length * (1 << (BITS*(sliceDim-1)))
   }
 
   private[this] def advanceA1(): Unit = {
-    if(pos == sliceStart + sliceLength) advanceSlice()
+    val pos = i1-len1+totalLength
+    if(pos == sliceEnd) advanceSlice(pos)
     val io = pos - sliceStart
-    (sliceDim: @switch) match {
-      case 1 => a1 = slice.asInstanceOf[Arr1]
-      case 2 => a1 = slice.asInstanceOf[Arr2](io >> BITS)
-      case 3 => a1 = slice.asInstanceOf[Arr3](io >> BITS2)((io >> BITS) & MASK)
-      case 4 => a1 = slice.asInstanceOf[Arr4](io >> BITS3)((io >> BITS2) & MASK)((io >> BITS) & MASK)
-      case 5 => a1 = slice.asInstanceOf[Arr5](io >> BITS4)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
-      case 6 => a1 = slice.asInstanceOf[Arr6](io >> BITS5)((io >> BITS4) & MASK)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+    a1 = (sliceDim: @switch) match {
+      case 1 => slice.asInstanceOf[Arr1]
+      case 2 => slice.asInstanceOf[Arr2](io >> BITS)
+      case 3 => slice.asInstanceOf[Arr3](io >> BITS2)((io >> BITS) & MASK)
+      case 4 => slice.asInstanceOf[Arr4](io >> BITS3)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+      case 5 => slice.asInstanceOf[Arr5](io >> BITS4)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+      case 6 => slice.asInstanceOf[Arr6](io >> BITS5)((io >> BITS4) & MASK)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
     }
-    pos1 = 0
+    len1 -= i1
+    i1 = 0
   }
 
   def next(): A = {
-    if(hasNext) {
-      if(a1 eq null) advanceA1()
-      val r = a1(pos1)
-      pos1 += 1
-      if(pos1 == a1.length) a1 = null
-      pos += 1
-      r.asInstanceOf[A]
-    } else Iterator.empty.next()
+    if(i1 == a1.length) advanceA1()
+    val r = a1(i1)
+    i1 += 1
+    r.asInstanceOf[A]
   }
 }
