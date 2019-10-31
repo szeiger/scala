@@ -1503,20 +1503,19 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
     take(_until)
   }
 
-  /*
   override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = {
     val xsLen = xs.length
-    val totalToBeCopied = IterableOnce.elemsToCopyToArray(remainingElementCount, xsLen, start, len)
-    var totalCopied = 0
-    while (hasNext && totalCopied < totalToBeCopied) {
-      val _start = start + totalCopied
-      val toBeCopied = IterableOnce.elemsToCopyToArray(endLo - lo, xsLen, _start, len - totalCopied)
-      Array.copy(display0, lo, xs, _start, toBeCopied)
-      totalCopied += toBeCopied
-      lo += toBeCopied
-      advanceToNextBlockIfNecessary()
+    val total = IterableOnce.elemsToCopyToArray(knownSize, xsLen, start, len)
+    var copied = 0
+    val isBoxed = xs.isInstanceOf[Array[AnyRef]]
+    while(copied < total) {
+      if(i1 == a1len) advanceA1()
+      val count = mmin(total-copied, a1.length-i1)
+      if(isBoxed) System.arraycopy(a1, i1, xs, start+copied, count)
+      else Array.copy(a1, i1, xs, start+copied, count)
+      i1 += count
+      copied += count
     }
-    totalCopied
+    total
   }
-  */
 }
