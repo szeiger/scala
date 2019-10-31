@@ -127,6 +127,12 @@ sealed abstract class NVector[+A]
   protected[immutable] def vectorSliceDim(idx: Int): Int
 
   override def iterator: Iterator[A] = new NVectorIterator(this)
+
+  override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = iterator.copyToArray(xs, start, len)
+
+  //override def toVector: Vector[A] = this
+
+  //override protected def applyPreferredMaxLength: Int = Vector.defaultApplyPreferredMaxLength
 }
 
 /** Empty vector */
@@ -164,6 +170,14 @@ private final object NVector0 extends NVector[Nothing] {
   protected[immutable] def vectorSliceCount: Int = 0
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = null
   protected[immutable] def vectorSliceDim(idx: Int): Int = -1
+
+  override def equals(o: Any): Boolean = {
+    if(this eq o.asInstanceOf[AnyRef]) true
+    else o match {
+      case that: NVector[_] => false
+      case o => super.equals(o)
+    }
+  }
 }
 
 /** Flat ArraySeq-like structure.
@@ -1395,12 +1409,16 @@ private[immutable] object NVectorStatics {
 private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] {
   import NVectorStatics._
 
-  private[this] val totalLength = v.length
-  private[this] var len1 = totalLength // length relative to i1
-  private[this] var a1: Arr1 = _
+  private[this] var totalLength = v.length
+
   private[this] var slice: Array[_ <: AnyRef] = _
   private[this] var sliceIdx, sliceDim = -1
-  private[this] var sliceStart, sliceEnd, i1 = 0
+  private[this] var sliceStart, sliceEnd = 0 // absolute positions
+
+  private[this] var a1: Arr1 = _
+  private[this] var a1len = 0
+  private[this] var i1 = 0 // current index in a1
+  private[this] var len1 = totalLength // remaining length relative to a1
 
   advanceA1()
 
@@ -1408,22 +1426,27 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
 
   @inline def hasNext: Boolean = len1 > i1
 
-  private[this] def advanceSlice(pos: Int): Unit = {
+  private[this] def advanceSlice(): Unit = {
     if(!hasNext) Iterator.empty.next()
     slice = null
     while((slice eq null) || slice.length == 0) {
       sliceIdx += 1
       slice = v.vectorSlice(sliceIdx)
     }
-    sliceStart = pos
+    sliceStart = sliceEnd
     sliceDim = v.vectorSliceDim(sliceIdx)
     sliceEnd = sliceStart + slice.length * (1 << (BITS*(sliceDim-1)))
   }
 
   private[this] def advanceA1(): Unit = {
     val pos = i1-len1+totalLength
-    if(pos == sliceEnd) advanceSlice(pos)
-    val io = pos - sliceStart
+    if(pos == sliceEnd) advanceSlice()
+    setA1(pos - sliceStart)
+    len1 -= i1
+    i1 = 0
+  }
+
+  private[this] def setA1(io: Int): Unit = {
     a1 = (sliceDim: @switch) match {
       case 1 => slice.asInstanceOf[Arr1]
       case 2 => slice.asInstanceOf[Arr2](io >> BITS)
@@ -1432,14 +1455,68 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
       case 5 => slice.asInstanceOf[Arr5](io >> BITS4)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
       case 6 => slice.asInstanceOf[Arr6](io >> BITS5)((io >> BITS4) & MASK)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
     }
-    len1 -= i1
-    i1 = 0
+    a1len = a1.length
   }
 
   def next(): A = {
-    if(i1 == a1.length) advanceA1()
+    if(i1 == a1len) advanceA1()
     val r = a1(i1)
     i1 += 1
     r.asInstanceOf[A]
   }
+
+  override def drop(n: Int): Iterator[A] = {
+    if(n > 0) {
+      val oldpos = i1-len1+totalLength
+      val newpos = mmin(oldpos + n, totalLength)
+      if(newpos == totalLength) {
+        i1 = 0
+        len1 = 0
+      } else {
+        while(newpos >= sliceEnd) advanceSlice()
+        val io = newpos - sliceStart
+        setA1(io)
+        i1 = io & MASK
+        len1 = i1 + (totalLength-newpos)
+      }
+    }
+    this
+  }
+
+  override def take(n: Int): Iterator[A] = {
+    if(n < knownSize) {
+      val trunc = knownSize - mmax(0, n)
+      totalLength -= trunc
+      len1 -= trunc
+      if(len1 < a1len) a1len = len1
+      if(totalLength < sliceEnd) sliceEnd = totalLength
+    }
+    this
+  }
+
+  override def slice(from: Int, until: Int): Iterator[A] = {
+    val _until =
+      if(from > 0) {
+        drop(from)
+        until - from
+      } else until
+    take(_until)
+  }
+
+  /*
+  override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = {
+    val xsLen = xs.length
+    val totalToBeCopied = IterableOnce.elemsToCopyToArray(remainingElementCount, xsLen, start, len)
+    var totalCopied = 0
+    while (hasNext && totalCopied < totalToBeCopied) {
+      val _start = start + totalCopied
+      val toBeCopied = IterableOnce.elemsToCopyToArray(endLo - lo, xsLen, _start, len - totalCopied)
+      Array.copy(display0, lo, xs, _start, toBeCopied)
+      totalCopied += toBeCopied
+      lo += toBeCopied
+      advanceToNextBlockIfNecessary()
+    }
+    totalCopied
+  }
+  */
 }
