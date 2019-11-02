@@ -17,11 +17,12 @@ import scala.annotation.switch
 import scala.collection.mutable.{ArrayBuilder, Builder, ReusableBuilder}
 import scala.collection.generic.DefaultSerializable
 import scala.reflect.ClassTag
-import java.util.Arrays
+import java.util.{Arrays, Spliterator}
 import java.util.Arrays.{copyOf, copyOfRange}
-import java.lang.Math.{max => mmax, min => mmin, abs}
+import java.lang.Math.{abs, max => mmax, min => mmin}
 
 import NVectorStatics.{Arr1, Arr2, Arr3, Arr4, Arr5, Arr6}
+import scala.collection.Stepper.EfficientSplit
 
 object NVector extends StrictOptimizedSeqFactory[NVector] {
   import NVectorStatics._
@@ -133,6 +134,17 @@ sealed abstract class NVector[+A]
   //override def toVector: Vector[A] = this
 
   //override protected def applyPreferredMaxLength: Int = Vector.defaultApplyPreferredMaxLength
+
+  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
+    import convert.impl._
+    val s = shape.shape match {
+      case StepperShape.IntShape    => new IntNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Int]])
+      case StepperShape.LongShape   => new LongNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Long]])
+      case StepperShape.DoubleShape => new DoubleNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Double]])
+      case _                        => shape.parUnbox(new AnyNVectorStepper[A](new NVectorIterator(this)))
+    }
+    s.asInstanceOf[S with EfficientSplit]
+  }
 }
 
 /** Empty vector */
@@ -178,6 +190,9 @@ private final object NVector0 extends NVector[Nothing] {
       case o => super.equals(o)
     }
   }
+
+  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[Nothing, S]): S with EfficientSplit =
+    empty1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
 }
 
 /** Flat ArraySeq-like structure.
@@ -244,6 +259,9 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   protected[immutable] def vectorSliceCount: Int = 1
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = data1
   protected[immutable] def vectorSliceDim(idx: Int): Int = 1
+
+  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit =
+    data1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
 }
 
 /** 2-level radix tree with fingers at both ends.
@@ -1246,17 +1264,6 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  final def foreachElem[A, U, T <: AnyRef](n: Int, a: Array[T], f: A => U): Unit = {
-    var i = 0
-    if(n == 1) foreachElem(a.asInstanceOf[Array[AnyRef]], f)
-    else {
-      while(i < a.length) {
-        foreachElem(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
-        i += 1
-      }
-    }
-  }
-
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
     val ac: Arr1 = new Array(a.length)
     var i = 0
@@ -1406,7 +1413,7 @@ private[immutable] object NVectorStatics {
   }
 }
 
-private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] {
+private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] with java.lang.Cloneable {
   import NVectorStatics._
 
   private[this] var totalLength = v.length
@@ -1518,4 +1525,56 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
     }
     total
   }
+
+  protected[immutable] def split(at: Int): NVectorIterator[A] = {
+    val it2 = clone().asInstanceOf[NVectorIterator[A]]
+    it2.take(at)
+    drop(at)
+    it2
+  }
+}
+
+
+private[immutable] abstract class NVectorStepperBase[A, Sub >: Null <: Stepper[A], Semi <: Sub](it: NVectorIterator[A])
+  extends Stepper[A] with EfficientSplit {
+
+  protected[this] def build(it: NVectorIterator[A]): Semi
+
+  final def hasStep: Boolean = it.hasNext
+
+  final def characteristics: Int = Spliterator.ORDERED + Spliterator.SIZED + Spliterator.SUBSIZED
+
+  final def estimateSize: Long = it.knownSize
+
+  def trySplit(): Sub = {
+    val len = it.knownSize
+    if(len > 1) build(it.split(len >> 1))
+    else null
+  }
+
+  override final def iterator: Iterator[A] = it
+}
+
+private[immutable] class AnyNVectorStepper[A](it: NVectorIterator[A])
+  extends NVectorStepperBase[A, AnyStepper[A], AnyNVectorStepper[A]](it) with AnyStepper[A] {
+  protected[this] def build(it: NVectorIterator[A]) = new AnyNVectorStepper(it)
+  def nextStep(): A = it.next()
+}
+
+private[immutable] class DoubleNVectorStepper(it: NVectorIterator[Double])
+  extends NVectorStepperBase[Double, DoubleStepper, DoubleNVectorStepper](it) with DoubleStepper {
+  protected[this] def build(it: NVectorIterator[Double]) = new DoubleNVectorStepper(it)
+  def nextStep(): Double = it.next()
+}
+
+private[immutable] class IntNVectorStepper(it: NVectorIterator[Int])
+  extends NVectorStepperBase[Int, IntStepper, IntNVectorStepper](it) with IntStepper {
+  protected[this] def build(it: NVectorIterator[Int]) = new IntNVectorStepper(it)
+  def nextStep(): Int = it.next()
+}
+
+private[immutable] class LongNVectorStepper(it: NVectorIterator[Long])
+  extends NVectorStepperBase[Long, LongStepper, LongNVectorStepper](it) with LongStepper {
+  protected[this] def build(it: NVectorIterator[Long]) = new LongNVectorStepper(it)
+  def nextStep(): Long = it.next()
 }
