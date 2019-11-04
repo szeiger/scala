@@ -369,4 +369,30 @@ class NVectorTest {
       assertEquals(i until size, v)
     }
   }
+
+  @Test
+  def testRebuild: Unit = for(size <- smallSizes) {
+    for(prependSize <- verySmallSizes) {
+      var v = NVector.range(0, size + prependSize)
+      for(i <- prependSize to 0 by -1) {
+        v = i +: v
+      }
+      v.validateDebug()
+      val b = NVector.newBuilder[Int]
+      b.addAll(v)
+      val v2 = b.result()
+      v2.validateDebug()
+      assertEquals(v, v2)
+    }
+  }
+
+  @Test
+  def testAppendAll: Unit = for(size <- smallSizes) {
+    for(appendSize <- smallSizes) {
+      val v = NVector.range(0, size)
+      val v2 = NVector.range(size, size + appendSize)
+      val v3 = v.appendedAll(v2)
+      assertEquals(0 until (size + appendSize), v3)
+    }
+  }
 }
