@@ -63,10 +63,6 @@ class VectorBenchmark2 {
     }
   }
 
-  @Benchmark def vConcatSame(bh: Blackhole): Any = {
-    bh.consume(v.concat(v))
-  }
-
   @Benchmark def vPrepend(bh: Blackhole): Any = {
     var coll0, coll = v
     var i = 0
@@ -184,7 +180,18 @@ class VectorBenchmark2 {
 
   @Benchmark def vBulkAppend10p(bh: Blackhole): Any = {
     var coll = v
-    val coll1 = coll.take(coll.size/10)
+    val coll1 = as.take(coll.size/10)
+    var i = 0
+    while(i < 100) {
+      coll = coll.appendedAll(coll1)
+      i += 1
+    }
+    bh.consume(coll)
+  }
+
+  @Benchmark def vBulkAppend100p(bh: Blackhole): Any = {
+    var coll = v
+    val coll1 = as
     var i = 0
     while(i < 100) {
       coll = coll.appendedAll(coll1)
@@ -195,7 +202,7 @@ class VectorBenchmark2 {
 
   @Benchmark def vBulkAppendSame(bh: Blackhole): Any = {
     var coll = v
-    val coll1 = coll
+    val coll1 = v
     var i = 0
     while(i < 100) {
       coll = coll.appendedAll(coll1)
@@ -222,10 +229,6 @@ class VectorBenchmark2 {
       bh.consume(as(rand.nextInt(size)))
       i += 1
     }
-  }
-
-  @Benchmark def asConcatSame(bh: Blackhole): Any = {
-    bh.consume(as.concat(as))
   }
 
   @Benchmark def asPrepend(bh: Blackhole): Any = {
@@ -281,10 +284,6 @@ class VectorBenchmark2 {
     }
   }
 
-  @Benchmark def aConcatSame(bh: Blackhole): Any = {
-    bh.consume(a.concat(a))
-  }
-
   @Benchmark def aPrepend(bh: Blackhole): Any = {
     var coll0, coll = a
     var i = 0
@@ -325,10 +324,6 @@ class VectorBenchmark2 {
       bh.consume(nv(rand.nextInt(size)))
       i += 1
     }
-  }
-
-  @Benchmark def nvConcatSame(bh: Blackhole): Any = {
-    bh.consume(nv.concat(v))
   }
 
   @Benchmark def nvPrepend(bh: Blackhole): Any = {
@@ -452,7 +447,18 @@ class VectorBenchmark2 {
 
   @Benchmark def nvBulkAppend10p(bh: Blackhole): Any = {
     var coll = nv
-    val coll1 = coll.take(coll.size/10)
+    val coll1 = as.take(coll.size/10)
+    var i = 0
+    while(i < 100) {
+      coll = coll.appendedAll(coll1)
+      i += 1
+    }
+    bh.consume(coll)
+  }
+
+  @Benchmark def nvBulkAppend100p(bh: Blackhole): Any = {
+    var coll = nv
+    val coll1 = as
     var i = 0
     while(i < 100) {
       coll = coll.appendedAll(coll1)
@@ -463,7 +469,7 @@ class VectorBenchmark2 {
 
   @Benchmark def nvBulkAppendSame(bh: Blackhole): Any = {
     var coll = nv
-    val coll1 = coll
+    val coll1 = nv
     var i = 0
     while(i < 100) {
       coll = coll.appendedAll(coll1)

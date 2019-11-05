@@ -1039,9 +1039,41 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     this
   }
 
+  private[this] def addArr1(data: Arr1): Unit = {
+    val dl = data.length
+    if(dl > 0) {
+      var i1 = len & MASK
+      if(i1 == 0) advance()
+      val copy1 = mmin(WIDTH-i1, dl)
+      val copy2 = dl - copy1
+      System.arraycopy(data, 0, a1, i1, copy1)
+      len += copy1
+      if(copy2 > 0) {
+        advance()
+        System.arraycopy(data, copy1, a1, 0, copy2)
+        len += copy2
+      }
+    }
+  }
+
+  private[this] def addVector(xs: NVector[A]): this.type = {
+    val sliceCount = xs.vectorSliceCount
+    var sliceIdx = 0
+    while(sliceIdx < sliceCount) {
+      val slice = xs.vectorSlice(sliceIdx)
+      xs.vectorSliceDim(sliceIdx) match {
+        case 1 => addArr1(slice.asInstanceOf[Arr1])
+        case n => foreachRec(n-2, slice, addArr1)
+      }
+      sliceIdx += 1
+    }
+    this
+  }
+
   override def addAll(xs: IterableOnce[A]): this.type = xs match {
-    case v: NVector[_] if len == 0 =>
-      initFrom(v)
+    case v: NVector[_] =>
+      if(len == 0) initFrom(v)
+      else addVector(v)
     case _ =>
       super.addAll(xs)
   }
@@ -1359,6 +1391,23 @@ private[immutable] object NVectorStatics {
     dest
   }
 
+  final def foreachRec[T <: AnyRef, A, U](level: Int, a: Array[T], f: A => U): Unit = {
+    var i = 0
+    var len = a.length
+    if(level == 0) {
+      while(i < len) {
+        f(a(i).asInstanceOf[A])
+        i += 1
+      }
+    } else {
+      val l = level-1
+      while(i < len) {
+        foreachRec(l, a(i).asInstanceOf[Array[AnyRef]], f)
+        i += 1
+      }
+    }
+  }
+
   @inline final def foreachElem[A, U](a1: Arr1, f: A => U): Unit = {
     var i1 = 0
     while(i1 < a1.length) {
@@ -1390,6 +1439,24 @@ private[immutable] object NVectorStatics {
       i4 += 1
     }
   }
+
+  /*
+  final def foreachElem[A, U](a5: Arr5, f: A => U): Unit = {
+    var i5 = 0
+    while(i5 < a5.length) {
+      foreachElem(a5(i5), f)
+      i5 += 1
+    }
+  }
+
+  final def foreachElem[A, U](a6: Arr6, f: A => U): Unit = {
+    var i6 = 0
+    while(i6 < a6.length) {
+      foreachElem(a6(i6), f)
+      i6 += 1
+    }
+  }
+  */
 
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
     val ac: Arr1 = new Array(a.length)
