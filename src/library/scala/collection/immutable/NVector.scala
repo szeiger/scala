@@ -1219,9 +1219,10 @@ private[immutable] object NVectorStatics {
   final val WIDTH4 = 1 << BITS4
   final val BITS5 = BITS * 5
   final val WIDTH5 = 1 << BITS5
+  // 1 extra bit in the last level to go up to Int.MaxValue (2^31-1) instead of 2^30:
   final val BITS6 = (BITS * 6) + 1
   final val WIDTH6 = 1 << BITS6
-  final val LASTWIDTH = WIDTH << 1 // 1 extra bit in the last level to go up to Int.MaxValue (2^31-1) instead of 2^30
+  final val LASTWIDTH = WIDTH << 1
 
   type Arr1 = Array[AnyRef]
   type Arr2 = Array[Array[AnyRef]]
@@ -1394,14 +1395,25 @@ private[immutable] object NVectorStatics {
   }
   */
 
-  /*
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
-    val ac: Arr1 = new Array(a.length)
     var i = 0
     while(i < a.length) {
       val v1 = a(i).asInstanceOf[AnyRef]
       val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
-      ac(i) = v2
+      if(v1 ne v2)
+        return mapElems1Rest(a, f, i, v2)
+      i += 1
+    }
+    a
+  }
+
+  private[this] final def mapElems1Rest[A, B](a: Arr1, f: A => B, at: Int, v2: AnyRef): Arr1 = {
+    var ac = new Arr1(a.length)
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
+    while(i < a.length) {
+      ac(i) = f(a(i).asInstanceOf[A]).asInstanceOf[AnyRef]
       i += 1
     }
     ac
@@ -1411,65 +1423,28 @@ private[immutable] object NVectorStatics {
     if(n == 1)
       mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
     else {
-      val ac: Array[AnyRef] = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
       var i = 0
       while(i < a.length) {
         val v1 = a(i)
         val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
-        ac(i) = v2
+        if(v1 ne v2)
+          return mapElemsRest(n, a, f, i, v2)
         i += 1
       }
-      ac.asInstanceOf[Array[T]]
+      a
     }
   }
-  */
 
-  final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
-    var ac: Arr1 = null
-    var i = 0
+  private[this] final def mapElemsRest[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B, at: Int, v2: AnyRef): Array[T] = {
+    var ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
     while(i < a.length) {
-      val v1 = a(i).asInstanceOf[AnyRef]
-      val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
-      if(ac ne null) {
-        ac(i) = v2
-      } else if(v1 ne v2) {
-        ac = new Array(a.length)
-        var j = 0
-        while(j < i) {
-          ac(j) = a(j)
-          j += 1
-        }
-        ac(i) = v2
-      }
+      ac(i) = mapElems(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
       i += 1
     }
-    if(ac ne null) ac else a
-  }
-
-  final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
-    if(n == 1)
-      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
-    else {
-      var ac: Array[AnyRef] = null
-      var i = 0
-      while(i < a.length) {
-        val v1 = a(i)
-        val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
-        if(ac ne null) {
-          ac(i) = v2
-        } else if(v1 ne v2) {
-          ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
-          var j = 0
-          while(j < i) {
-            ac(j) = a(j)
-            j += 1
-          }
-          ac(i) = v2
-        }
-        i += 1
-      }
-      if(ac ne null) ac.asInstanceOf[Array[T]] else a
-    }
+    ac.asInstanceOf[Array[T]]
   }
 
   final def logArray[T <: AnyRef](sb: mutable.StringBuilder, a: Array[T], indent: String = "", prefix: String = "", findIn: Array[Array[T]] = null, findInName: String = "<array>"): mutable.StringBuilder = {
