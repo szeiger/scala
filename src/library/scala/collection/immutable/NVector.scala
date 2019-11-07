@@ -939,13 +939,12 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   private[this] var len1, lenRest, offset = 0
   private[this] var depth = 1
 
-  @inline private[this] final def len = len1 + lenRest
-  @inline private[this] final def len_=(i: Int): Unit = {
+  @inline private[this] final def setLen(i: Int): Unit = {
     len1 = i & MASK
     lenRest = i - len1
   }
 
-  override def knownSize: Int = len - offset
+  override def knownSize: Int = len1 + lenRest - offset
 
   def clear(): Unit = {
     a6 = null
@@ -954,13 +953,14 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     a3 = null
     a2 = null
     a1 = new Arr1(WIDTH)
-    len = 0
+    len1 = 0
+    lenRest = 0
     offset = 0
     depth = 1
   }
 
   def initSparse(size: Int, elem: A): Unit = {
-    len = size
+    setLen(size)
     Arrays.fill(a1, elem)
     if(size > WIDTH) {
       a2 = new Array(WIDTH)
@@ -990,7 +990,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       case 0 =>
       case 1 =>
         depth = 1
-        len = v.length
+        setLen(v.length)
         a1 = copyOrUse(v.vectorSlice(0).asInstanceOf[Arr1], 0, WIDTH)
       case 3 =>
         val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
@@ -998,7 +998,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a1 = copyOrUse(v.vectorSlice(2).asInstanceOf[Arr1], 0, WIDTH)
         depth = 2
         offset = WIDTH - p1.length
-        len = v.length + offset
+        setLen(v.length + offset)
         a2 = new Arr2(WIDTH)
         a2(0) = p1
         System.arraycopy(d2, 0, a2, 1, d2.length)
@@ -1011,7 +1011,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a1 = copyOrUse(v.vectorSlice(4).asInstanceOf[Arr1], 0, WIDTH)
         depth = 3
         offset = WIDTH2 - p1.length - WIDTH*p2.length
-        len = v.length + offset
+        setLen(v.length + offset)
         a3 = new Arr3(WIDTH)
         a3(0) = copyPrepend(p1, p2)
         System.arraycopy(d3, 0, a3, 1, d3.length)
@@ -1028,7 +1028,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a1 = copyOrUse(v.vectorSlice(6).asInstanceOf[Arr1], 0, WIDTH)
         depth = 4
         offset = WIDTH3 - p1.length - WIDTH*p2.length - WIDTH2*p3.length
-        len = v.length + offset
+        setLen(v.length + offset)
         a4 = new Arr4(WIDTH)
         a4(0) = copyPrepend(copyPrepend(p1, p2), p3)
         System.arraycopy(d4, 0, a4, 1, d4.length)
@@ -1094,12 +1094,6 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       super.addAll(xs)
   }
 
-  @inline private[this] def shift2(i2: Int): Unit = { a1 = new Array(WIDTH); a2(i2) = a1 }
-  @inline private[this] def shift3(i3: Int): Unit = { a2 = new Array(WIDTH); a3(i3) = a2 }
-  @inline private[this] def shift4(i4: Int): Unit = { a3 = new Array(WIDTH); a4(i4) = a3 }
-  @inline private[this] def shift5(i5: Int): Unit = { a4 = new Array(WIDTH); a5(i5) = a4 }
-  @inline private[this] def shift6(i6: Int): Unit = { a5 = new Array(WIDTH); a6(i6) = a5 }
-
   private[this] def advance(): Unit = {
     val idx = lenRest + WIDTH
     val xor = idx ^ lenRest
@@ -1154,108 +1148,8 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     }
   }
 
-  private[this] def _advance(): Unit = {
-    lenRest += WIDTH
-    len1 = 0
-    (depth: @switch) match {
-      case 1 =>
-        // len == WIDTH always holds
-        a2 = new Array(WIDTH)
-        a2(0) = a1
-        shift2(1)
-        depth = 2
-      case 2 =>
-        if(lenRest == WIDTH2) {
-          a3 = new Array(WIDTH)
-          a3(0) = a2
-          shift3(1)
-          shift2(0)
-          depth = 3
-        } else shift2(lenRest >>> BITS)
-      case 3 =>
-        if(lenRest == WIDTH3) {
-          a4 = new Array(WIDTH)
-          a4(0) = a3
-          shift4(1)
-          shift3(0)
-          shift2(0)
-          depth = 4
-        } else {
-          val i2 = (lenRest >>> BITS) & MASK
-          if(i2 == 0)
-            shift3(lenRest >>> BITS2)
-          shift2(i2)
-        }
-      case 4 =>
-        if(lenRest == WIDTH4) {
-          a5 = new Array(WIDTH)
-          a5(0) = a4
-          shift5(1)
-          shift4(0)
-          shift3(0)
-          shift2(0)
-          depth = 5
-        } else {
-          val i2 = (lenRest >>> BITS) & MASK
-          if(i2 == 0) {
-            val i3 = (lenRest >>> BITS2) & MASK
-            if(i3 == 0)
-              shift4(lenRest >>> BITS3)
-            shift3(i3)
-          }
-          shift2(i2)
-        }
-      case 5 =>
-        if(lenRest == WIDTH5) {
-          a6 = new Array(LASTWIDTH)
-          a6(0) = a5
-          shift6(1)
-          shift5(0)
-          shift4(0)
-          shift3(0)
-          shift2(0)
-          depth = 6
-        } else {
-          val i2 = (lenRest >>> BITS) & MASK
-          if(i2 == 0) {
-            val i3 = (lenRest >>> BITS2) & MASK
-            if(i3 == 0) {
-              val i4 = (lenRest >>> BITS3) & MASK
-              if(i4 == 0)
-                shift5(lenRest >>> BITS4)
-              shift4(i4)
-            }
-            shift3(i3)
-          }
-          shift2(i2)
-        }
-      case 6 =>
-        if(lenRest == Integer.MAX_VALUE) {
-          throw new IndexOutOfBoundsException
-        } else {
-          val i2 = (lenRest >>> BITS) & MASK
-          if(i2 == 0) {
-            val i3 = (lenRest >>> BITS2) & MASK
-            if(i3 == 0) {
-              val i4 = (lenRest >>> BITS3) & MASK
-              if(i4 == 0) {
-                val i5 = (lenRest >>> BITS4) & MASK
-                if(i5 == 0) {
-                  shift6(lenRest >>> BITS5)
-                }
-                shift5(i5)
-              }
-              shift4(i4)
-            }
-            shift3(i3)
-          }
-          shift2(i2)
-        }
-    }
-  }
-
   def result(): NVector[A] = try {
-    val len = this.len
+    val len = len1 + lenRest
     val realLen = len - offset
     if(realLen == 0) NVector.empty
     else if(len <= WIDTH) {
@@ -1300,14 +1194,8 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   } catch { case ex: Exception => println(toDebugString); throw ex }
 
   private[collection] def toDebugString: String = {
-    val i1 = (len-1) & MASK
-    val i2 = ((len-1) >>> BITS) & MASK
-    val i3 = ((len-1) >>> BITS2) & MASK
-    val i4 = ((len-1) >>> BITS3) & MASK
-    val i5 = ((len-1) >>> BITS4) & MASK
-    val i6 = ((len-1) >>> BITS5) & MASK
     val sb = new mutable.StringBuilder()
-    sb.append(s"NVectorBuilder(len=$len, offset=$offset, depth=$depth): i1=$i1, i2=$i2, i3=$i3, i4=$i4, i5=$i5, i6=$i6\n")
+    sb.append(s"NVectorBuilder(len1=$len1, lenRest=$lenRest, offset=$offset, depth=$depth)\n")
     logArray(sb, a6, "  ", "a6: ")
     logArray(sb, a5, "  ", "a5: ", a6, "a6")
     logArray(sb, a4, "  ", "a4: ", a5, "a5")
