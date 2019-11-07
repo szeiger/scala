@@ -49,7 +49,9 @@ class NVectorTest {
 
     for (i <- 0 until els.size) {
       val (prefix, suffix) = els.splitAt(i)
-
+      prefix.validateDebug()
+      suffix.validateDebug()
+      (prefix ++: suffix).validateDebug
       assertEquals(els, prefix ++: suffix)
       assertEquals(els, prefix.toList ++: suffix)
     }

@@ -13,6 +13,7 @@
 package scala.collection.immutable
 
 import java.io.{BufferedWriter, FileWriter, PrintWriter}
+import java.text.DecimalFormat
 
 import scala.io.Source
 
@@ -37,20 +38,59 @@ object GenerateVectorBenchmark2Charts extends App {
     Result(local(unquote(a(0))), a(4).toDouble, a(5).toDouble, a(7).toInt)
   }.toIndexedSeq.groupBy(_.name)
 
-  def printChartData(out: PrintWriter, name: String, rss: IndexedSeq[Result]*): Unit = {
-    println(s"""drawChart(new Options("$name"), benchmarkData.$name);""")
+  val fmt3 = new DecimalFormat("###,###.###")
+
+  def fmtTime(ns: Double, by: Double, withUnit: Boolean): String = {
+    val (s, u) =
+      if(by >= 1000000000d) (fmt3.format(ns/1000000000d), "s")
+      else if(by >= 1000000d) (fmt3.format(ns/1000000d), "ms")
+      else if(by >= 1000d) (fmt3.format(ns/1000d), "μs")
+      else (fmt3.format(ns), "ns")
+    if(withUnit) s"$s $u"
+    else s
+  }
+
+  def printChartData(out: PrintWriter, name: String, rss: IndexedSeq[IndexedSeq[Result]], seriesNames: IndexedSeq[String]): Unit = {
+    println(s"""drawChart(new ChartData("$name", benchmarkData.$name));""")
     val sizes = rss.flatten.map(_.size).toSet.toIndexedSeq.sorted
     val bySize = rss.map(_.iterator.map(r => (r.size, r)).toMap)
-    out.println(s"  $name: [")
+    val benchmarkNames = rss.map(_.head.name)
+
+    val minScore = rss.flatten.map(_.score).min
+    val maxScore = rss.flatten.map(_.score).max
+    var timeFactor =
+      if(minScore > 1000000d) 1000000L
+      else if(minScore > 1000d) 1000L
+      else 1L
+    val timeUnit = timeFactor match {
+      case 1L => "ns"
+      case 1000L => "μs"
+      case 1000000L => "ms"
+    }
+
+    out.println(s"  $name: {")
+    out.println(s"    rows: [")
     var first = true
     sizes.foreach { size =>
       if(!first) out.println(",")
       else first = false
-      val line = bySize.map(_.get(size).map(r => Seq(r.score, r.score-r.error, r.score+r.error)).getOrElse(Seq(null, null, null))).flatten
-      out.print(s"    [$size, ${line.mkString(", ")}]")
+      val forSize = bySize.map(_.get(size))
+      val minScore = forSize.map(_.map(_.score)).flatten.min
+      val line = forSize.zipWithIndex.map { case (ro, i) => ro.map { r =>
+        Seq(
+          r.score/timeFactor,
+          (r.score-r.error)/timeFactor,
+          (r.score+r.error)/timeFactor,
+          "\"" + seriesNames(i) + ": <b>" + fmtTime(r.score, minScore, true) + "</b> ± " + fmtTime(r.error, minScore, false) + "\""
+        )
+      }.getOrElse(Seq(null, null, null, null)) }.flatten
+      out.print(s"      [$size, ${line.mkString(", ")}]")
     }
     out.println()
-    out.print("  ]")
+    out.println("    ],")
+    out.println("    names: [" + benchmarkNames.map(s => "\""+s+"\"").mkString(", ") + "],")
+    out.println("    timeUnit: \""+timeUnit+"\"")
+    out.print("  }")
   }
 
   val baseNames = data.keySet.filter(_.startsWith("nv")).map(_.drop(2)).toSeq.sorted
@@ -62,10 +102,11 @@ object GenerateVectorBenchmark2Charts extends App {
   out.println("var benchmarkData = {")
 
   var first = true
+  val seriesNames = IndexedSeq("Old Vector", "New Vector")
   for((baseName, nvRes, vRes) <- comparisons) {
     if(!first) out.println(",")
     else first = false
-    printChartData(out, baseName, vRes, nvRes)
+    printChartData(out, baseName, IndexedSeq(vRes, nvRes), seriesNames)
   }
 
   out.println()

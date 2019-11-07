@@ -49,7 +49,7 @@ class VectorBenchmark2 {
 
   @Benchmark def vApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 100000) {
       bh.consume(v(i % size))
       i += 1
     }
@@ -217,7 +217,7 @@ class VectorBenchmark2 {
 
   @Benchmark def asApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 100000) {
       bh.consume(as(i % size))
       i += 1
     }
@@ -270,7 +270,7 @@ class VectorBenchmark2 {
 
   @Benchmark def aApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 100000) {
       bh.consume(a(i % size))
       i += 1
     }
@@ -312,7 +312,7 @@ class VectorBenchmark2 {
 
   @Benchmark def nvApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 100000) {
       bh.consume(nv(i % size))
       i += 1
     }

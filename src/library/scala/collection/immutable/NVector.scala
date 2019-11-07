@@ -92,17 +92,21 @@ sealed abstract class NVector[+A]
 
   protected[this] def tinyAppendLimit: Int = 4 + vectorSliceCount
 
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = suffix.knownSize match {
-    case 0 => this
-    case n =>
-      if(n > 0 && n < tinyAppendLimit) {
-        var v: NVector[B] = this
-        suffix match {
-          case it: Iterable[_] => it.foreach(x => v = v.appended(x))
-          case _ => suffix.iterator.foreach(x => v = v.appended(x))
-        }
-        v
-      } else new NVectorBuilder[B].initFrom(this).addAll(suffix).result()
+  override final def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+    val k = suffix.knownSize
+    if(k == 0) this
+    else appendedAll0(suffix, k)
+  }
+
+  protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+    if(k > 0 && k < tinyAppendLimit) {
+      var v: NVector[B] = this
+      suffix match {
+        case it: Iterable[_] => it.foreach(x => v = v.appended(x))
+        case _ => suffix.iterator.foreach(x => v = v.appended(x))
+      }
+      v
+    } else new NVectorBuilder[B].initFrom(this).addAll(suffix).result()
   }
 
   private[collection] def validate(): Unit
@@ -204,9 +208,8 @@ private final object NVector0 extends NVector[Nothing] {
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[Nothing, S]): S with EfficientSplit =
     empty1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
 
-  override def appendedAll[B >: Nothing](suffix: collection.IterableOnce[B]): NVector[B] = {
-    if(suffix.knownSize == 0) this else NVector.from(suffix)
-  }
+  override protected[this]def appendedAll0[B >: Nothing](suffix: collection.IterableOnce[B], k: Int): NVector[B] =
+    NVector.from(suffix)
 }
 
 /** Flat ArraySeq-like structure.
@@ -277,10 +280,10 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit =
     data1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
 
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val data1b = append1IfSpace(data1, suffix)
     if(data1b ne null) new NVector1(data1b)
-    else super.appendedAll(suffix)
+    else super.appendedAll0(suffix, k)
   }
 }
 
@@ -302,7 +305,7 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len1) {
       val io = index - len1
-      val i2 = io >> BITS
+      val i2 = io >>> BITS
       val i1 = io & MASK
       if(i2 < data2.length) data2(i2)(i1)
       else suffix1(i1)
@@ -313,7 +316,7 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len1) {
       val io = index - len1
-      val i2 = io >> BITS
+      val i2 = io >>> BITS
       val i1 = io & MASK
       if(i2 < data2.length)
         new NVector2(prefix1, len1, copyUpdate(data2, i2, i1, elem), suffix1, length)
@@ -395,10 +398,10 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 2-abs(idx-1)
 
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) new NVector2(prefix1, len1, data2, suffix1b, length-suffix1.length+suffix1b.length)
-    else super.appendedAll(suffix)
+    else super.appendedAll0(suffix, k)
   }
 }
 
@@ -425,15 +428,15 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len12) {
       val io = index - len12
-      val i3 = io >> BITS2
-      val i2 = (io >> BITS) & MASK
+      val i3 = io >>> BITS2
+      val i2 = (io >>> BITS) & MASK
       val i1 = io & MASK
       if(i3 < data3.length) data3(i3)(i2)(i1)
       else if(i2 < suffix2.length) suffix2(i2)(i1)
       else suffix1(i1)
     } else if(index >= len1) {
       val io = index - len1
-      prefix2(io >> BITS)(io & MASK)
+      prefix2(io >>> BITS)(io & MASK)
     } else prefix1(index)
   }.asInstanceOf[A]
 
@@ -441,8 +444,8 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len12) {
       val io = index - len12
-      val i3 = io >> BITS2
-      val i2 = (io >> BITS) & MASK
+      val i3 = io >>> BITS2
+      val i2 = (io >>> BITS) & MASK
       val i1 = io & MASK
       if(i3 < data3.length)
         new NVector3(prefix1, len1, prefix2, len12, copyUpdate(data3, i3, i2, i1, elem), suffix2, suffix1, length)
@@ -452,7 +455,7 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
         new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, copyUpdate(suffix1, i1, elem), length)
     } else if(index >= len1) {
       val io = index - len1
-      new NVector3(prefix1, len1, copyUpdate(prefix2, io >> BITS, io & MASK, elem), len12, data3, suffix2, suffix1, length)
+      new NVector3(prefix1, len1, copyUpdate(prefix2, io >>> BITS, io & MASK, elem), len12, data3, suffix2, suffix1, length)
     } else {
       new NVector3(copyUpdate(prefix1, index, elem), len1, prefix2, len12, data3, suffix2, suffix1, length)
     }
@@ -544,10 +547,10 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 3-abs(idx-2)
 
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, suffix1b, length-suffix1.length+suffix1b.length)
-    else super.appendedAll(suffix)
+    else super.appendedAll0(suffix, k)
   }
 }
 
@@ -577,9 +580,9 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len123) {
       val io = index - len123
-      val i4 = io >> BITS3
-      val i3 = (io >> BITS2) & MASK
-      val i2 = (io >> BITS) & MASK
+      val i4 = io >>> BITS3
+      val i3 = (io >>> BITS2) & MASK
+      val i2 = (io >>> BITS) & MASK
       val i1 = io & MASK
       if(i4 < data4.length) data4(i4)(i3)(i2)(i1)
       else if(i3 < suffix3.length) suffix3(i3)(i2)(i1)
@@ -587,10 +590,10 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
       else suffix1(i1)
     } else if(index >= len12) {
       val io = index - len12
-      prefix3(io >> BITS2)((io >> BITS) & MASK)(io & MASK)
+      prefix3(io >>> BITS2)((io >>> BITS) & MASK)(io & MASK)
     } else if(index >= len1) {
       val io = index - len1
-      prefix2(io >> BITS)(io & MASK)
+      prefix2(io >>> BITS)(io & MASK)
     } else prefix1(index)
   }.asInstanceOf[A]
 
@@ -598,9 +601,9 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     if(index < 0 || index >= length) throw new IndexOutOfBoundsException
     if(index >= len123) {
       val io = index - len123
-      val i4 = io >> BITS3
-      val i3 = (io >> BITS2) & MASK
-      val i2 = (io >> BITS) & MASK
+      val i4 = io >>> BITS3
+      val i3 = (io >>> BITS2) & MASK
+      val i2 = (io >>> BITS) & MASK
       val i1 = io & MASK
       if(i4 < data4.length)
         new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, copyUpdate(data4, i4, i3, i2, i1, elem), suffix3, suffix2, suffix1, length)
@@ -612,10 +615,10 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
         new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, copyUpdate(suffix1, i1, elem), length)
     } else if(index >= len12) {
       val io = index - len12
-      new NVector4(prefix1, len1, prefix2, len12, copyUpdate(prefix3, io >> BITS2, (io >> BITS) & MASK, io & MASK, elem), len123, data4, suffix3, suffix2, suffix1, length)
+      new NVector4(prefix1, len1, prefix2, len12, copyUpdate(prefix3, io >>> BITS2, (io >>> BITS) & MASK, io & MASK, elem), len123, data4, suffix3, suffix2, suffix1, length)
     } else if(index >= len1) {
       val io = index - len1
-      new NVector4(prefix1, len1, copyUpdate(prefix2, io >> BITS, io & MASK, elem), len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length)
+      new NVector4(prefix1, len1, copyUpdate(prefix2, io >>> BITS, io & MASK, elem), len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length)
     } else {
       new NVector4(copyUpdate(prefix1, index, elem), len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length)
     }
@@ -681,6 +684,11 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     assert(len123 + d4l + s3l + s2l + suffix1.length == length, s"sum of lengths ($len123 + $d4l + $s3l + $s2l + ${suffix1.length}) should be vector length ($length)")
   }
 
+  override def map[B](f: A => B): NVector[B] =
+    new NVector4(mapElems1(prefix1, f), len1, mapElems(2, prefix2, f), len12, mapElems(3, prefix3, f), len123, mapElems(4, data4, f), mapElems(3, suffix3, f), mapElems(2, suffix2, f), mapElems1(suffix1, f), length)
+
+  override def head: A = prefix1(0).asInstanceOf[A]
+
   override def last: A = suffix1(suffix1.length-1).asInstanceOf[A]
 
   protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
@@ -715,10 +723,10 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 4-abs(idx-3)
 
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1b, length-suffix1.length+suffix1b.length)
-    else super.appendedAll(suffix)
+    else super.appendedAll0(suffix, k)
   }
 }
 
@@ -748,8 +756,8 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       add(1, copyOrUse(a, lo, hi))
     } else {
       val bitsN = BITS * (n-1)
-      var loN = lo >> bitsN
-      var hiN = hi >> bitsN
+      var loN = lo >>> bitsN
+      var hiN = hi >>> bitsN
       if(n != 6) {
         loN &= MASK
         hiN &= MASK
@@ -927,8 +935,15 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   private[this] var a4: Arr4 = _
   private[this] var a3: Arr3 = _
   private[this] var a2: Arr2 = _
-  private[this] var a1: Arr1 = _
-  private[this] var len, offset, depth: Int = 0
+  private[this] var a1: Arr1 = new Arr1(WIDTH)
+  private[this] var len1, lenRest, offset = 0
+  private[this] var depth = 1
+
+  @inline private[this] final def len = len1 + lenRest
+  @inline private[this] final def len_=(i: Int): Unit = {
+    len1 = i & MASK
+    lenRest = i - len1
+  }
 
   override def knownSize: Int = len - offset
 
@@ -938,15 +953,14 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     a4 = null
     a3 = null
     a2 = null
-    a1 = null
+    a1 = new Arr1(WIDTH)
     len = 0
     offset = 0
-    depth = 0
+    depth = 1
   }
 
   def initSparse(size: Int, elem: A): Unit = {
     len = size
-    a1 = new Array(WIDTH)
     Arrays.fill(a1, elem)
     if(size > WIDTH) {
       a2 = new Array(WIDTH)
@@ -1028,30 +1042,32 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       case 11 =>
         ???
     }
+    if(len1 == 0 && lenRest > 0) { // force advance() on next addition
+      len1 = WIDTH
+      lenRest -= WIDTH
+    }
     this
   }
 
   def addOne(elem: A): this.type = {
-    val i1 = len & MASK
-    if(i1 == 0) advance()
-    a1(i1) = elem.asInstanceOf[AnyRef]
-    len += 1
+    if(len1 == WIDTH) advance()
+    a1(len1) = elem.asInstanceOf[AnyRef]
+    len1 += 1
     this
   }
 
   private[this] def addArr1(data: Arr1): Unit = {
     val dl = data.length
     if(dl > 0) {
-      var i1 = len & MASK
-      if(i1 == 0) advance()
-      val copy1 = mmin(WIDTH-i1, dl)
+      if(len1 == WIDTH) advance()
+      val copy1 = mmin(WIDTH-len1, dl)
       val copy2 = dl - copy1
-      System.arraycopy(data, 0, a1, i1, copy1)
-      len += copy1
+      System.arraycopy(data, 0, a1, len1, copy1)
+      len1 += copy1
       if(copy2 > 0) {
         advance()
         System.arraycopy(data, copy1, a1, 0, copy2)
-        len += copy2
+        len1 += copy2
       }
     }
   }
@@ -1072,131 +1088,160 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
 
   override def addAll(xs: IterableOnce[A]): this.type = xs match {
     case v: NVector[_] =>
-      if(len == 0) initFrom(v)
+      if(len1 == 0 && lenRest == 0) initFrom(v)
       else addVector(v)
     case _ =>
       super.addAll(xs)
   }
 
-  private[this] def shift2(i2: Int): Unit = { a1 = new Array(WIDTH); a2(i2) = a1 }
-  private[this] def shift3(i3: Int): Unit = { a2 = new Array(WIDTH); a3(i3) = a2 }
-  private[this] def shift4(i4: Int): Unit = { a3 = new Array(WIDTH); a4(i4) = a3 }
-  private[this] def shift5(i5: Int): Unit = { a4 = new Array(WIDTH); a5(i5) = a4 }
-  private[this] def shift6(i6: Int): Unit = { a5 = new Array(WIDTH); a6(i6) = a5 }
+  @inline private[this] def shift2(i2: Int): Unit = { a1 = new Array(WIDTH); a2(i2) = a1 }
+  @inline private[this] def shift3(i3: Int): Unit = { a2 = new Array(WIDTH); a3(i3) = a2 }
+  @inline private[this] def shift4(i4: Int): Unit = { a3 = new Array(WIDTH); a4(i4) = a3 }
+  @inline private[this] def shift5(i5: Int): Unit = { a4 = new Array(WIDTH); a5(i5) = a4 }
+  @inline private[this] def shift6(i6: Int): Unit = { a5 = new Array(WIDTH); a6(i6) = a5 }
 
-  private[this] def advance(): Unit = (depth: @switch) match {
-    case 0 =>
+  private[this] def advance(): Unit = {
+    val idx = lenRest + WIDTH
+    val xor = idx ^ lenRest
+    lenRest = idx
+    len1 = 0
+    advance1(idx, xor)
+  }
+
+  private[this] def advance1(idx: Int, xor: Int): Unit = {
+    if (xor < WIDTH2) { // level = 1
+      if (depth == 1) { a2 = new Array(WIDTH); a2(0) = a1; depth += 1 }
       a1 = new Array(WIDTH)
-      depth = 1
-    case 1 =>
-      if(len == WIDTH) {
+      a2((idx >>> BITS) & MASK) = a1
+    } else if (xor < WIDTH3) { // level = 2
+      if (depth == 2) { a3 = new Array(WIDTH); a3(0) = a2; depth += 1 }
+      a1 = new Array(WIDTH)
+      a2 = new Array(WIDTH)
+      a2((idx >>> BITS) & MASK) = a1
+      a3((idx >>> BITS2) & MASK) = a2
+    } else if (xor < WIDTH4) { // level = 3
+      if (depth == 3) { a4 = new Array(WIDTH); a4(0) = a3; depth += 1 }
+      a1 = new Array(WIDTH)
+      a2 = new Array(WIDTH)
+      a3 = new Array(WIDTH)
+      a2((idx >>> BITS) & MASK) = a1
+      a3((idx >>> BITS2) & MASK) = a2
+      a4((idx >>> BITS3) & MASK) = a3
+    } else if (xor < WIDTH5) { // level = 4
+      if (depth == 4) { a5 = new Array(WIDTH); a5(0) = a4; depth += 1 }
+      a1 = new Array(WIDTH)
+      a2 = new Array(WIDTH)
+      a3 = new Array(WIDTH)
+      a4 = new Array(WIDTH)
+      a2((idx >>> BITS) & MASK) = a1
+      a3((idx >>> BITS2) & MASK) = a2
+      a4((idx >>> BITS3) & MASK) = a3
+      a5((idx >>> BITS4) & MASK) = a4
+    } else if (xor < WIDTH6) { // level = 5
+      if (depth == 5) { a6 = new Array(WIDTH); a6(0) = a5; depth += 1 }
+      a1 = new Array(WIDTH)
+      a2 = new Array(WIDTH)
+      a3 = new Array(WIDTH)
+      a4 = new Array(WIDTH)
+      a5 = new Array(WIDTH)
+      a2((idx >>> BITS) & MASK) = a1
+      a3((idx >>> BITS2) & MASK) = a2
+      a4((idx >>> BITS3) & MASK) = a3
+      a5((idx >>> BITS4) & MASK) = a4
+      a6((idx >>> BITS5) & MASK) = a5
+    } else {                      // level = 6
+      throw new IllegalArgumentException()
+    }
+  }
+
+  private[this] def _advance(): Unit = {
+    lenRest += WIDTH
+    len1 = 0
+    (depth: @switch) match {
+      case 1 =>
+        // len == WIDTH always holds
         a2 = new Array(WIDTH)
         a2(0) = a1
         shift2(1)
         depth = 2
-      }
-    case 2 =>
-      if(len == WIDTH2) {
-        a3 = new Array(WIDTH)
-        a3(0) = a2
-        shift3(1)
-        shift2(0)
-        depth = 3
-      } else {
-        val i1 = len & MASK
-        val i2 = len >> BITS
-        if(i1 == 0) {
+      case 2 =>
+        if(lenRest == WIDTH2) {
+          a3 = new Array(WIDTH)
+          a3(0) = a2
+          shift3(1)
+          shift2(0)
+          depth = 3
+        } else shift2(lenRest >>> BITS)
+      case 3 =>
+        if(lenRest == WIDTH3) {
+          a4 = new Array(WIDTH)
+          a4(0) = a3
+          shift4(1)
+          shift3(0)
+          shift2(0)
+          depth = 4
+        } else {
+          val i2 = (lenRest >>> BITS) & MASK
+          if(i2 == 0)
+            shift3(lenRest >>> BITS2)
           shift2(i2)
         }
-      }
-    case 3 =>
-      if(len == WIDTH3) {
-        a4 = new Array(WIDTH)
-        a4(0) = a3
-        shift4(1)
-        shift3(0)
-        shift2(0)
-        depth = 4
-      } else {
-        val i1 = len & MASK
-        val i2 = (len >> BITS) & MASK
-        val i3 = len >> BITS2
-        if(i1 == 0) {
+      case 4 =>
+        if(lenRest == WIDTH4) {
+          a5 = new Array(WIDTH)
+          a5(0) = a4
+          shift5(1)
+          shift4(0)
+          shift3(0)
+          shift2(0)
+          depth = 5
+        } else {
+          val i2 = (lenRest >>> BITS) & MASK
           if(i2 == 0) {
+            val i3 = (lenRest >>> BITS2) & MASK
+            if(i3 == 0)
+              shift4(lenRest >>> BITS3)
             shift3(i3)
           }
           shift2(i2)
         }
-      }
-    case 4 =>
-      if(len == WIDTH4) {
-        a5 = new Array(WIDTH)
-        a5(0) = a4
-        shift5(1)
-        shift4(0)
-        shift3(0)
-        shift2(0)
-        depth = 5
-      } else {
-        val i1 = len & MASK
-        val i2 = (len >> BITS) & MASK
-        val i3 = (len >> BITS2) & MASK
-        val i4 = len >> BITS3
-        if(i1 == 0) {
+      case 5 =>
+        if(lenRest == WIDTH5) {
+          a6 = new Array(LASTWIDTH)
+          a6(0) = a5
+          shift6(1)
+          shift5(0)
+          shift4(0)
+          shift3(0)
+          shift2(0)
+          depth = 6
+        } else {
+          val i2 = (lenRest >>> BITS) & MASK
           if(i2 == 0) {
+            val i3 = (lenRest >>> BITS2) & MASK
             if(i3 == 0) {
+              val i4 = (lenRest >>> BITS3) & MASK
+              if(i4 == 0)
+                shift5(lenRest >>> BITS4)
               shift4(i4)
             }
             shift3(i3)
           }
           shift2(i2)
         }
-      }
-    case 5 =>
-      if(len == WIDTH5) {
-        a6 = new Array(LASTWIDTH)
-        a6(0) = a5
-        shift6(1)
-        shift5(0)
-        shift4(0)
-        shift3(0)
-        shift2(0)
-        depth = 6
-      } else {
-        val i1 = len & MASK
-        val i2 = (len >> BITS) & MASK
-        val i3 = (len >> BITS2) & MASK
-        val i4 = (len >> BITS3) & MASK
-        val i5 = len >> BITS4
-        if(i1 == 0) {
+      case 6 =>
+        if(lenRest == Integer.MAX_VALUE) {
+          throw new IndexOutOfBoundsException
+        } else {
+          val i2 = (lenRest >>> BITS) & MASK
           if(i2 == 0) {
+            val i3 = (lenRest >>> BITS2) & MASK
             if(i3 == 0) {
+              val i4 = (lenRest >>> BITS3) & MASK
               if(i4 == 0) {
-                shift5(i5)
-              }
-              shift4(i4)
-            }
-            shift3(i3)
-          }
-          shift2(i2)
-        }
-      }
-    case 6 =>
-      if(len == Integer.MAX_VALUE) {
-        throw new IndexOutOfBoundsException
-      } else {
-        val i1 = len & MASK
-        val i2 = (len >> BITS) & MASK
-        val i3 = (len >> BITS2) & MASK
-        val i4 = (len >> BITS3) & MASK
-        val i5 = (len >> BITS4) & MASK
-        val i6 = len >> BITS5
-        if(i1 == 0) {
-          if(i2 == 0) {
-            if(i3 == 0) {
-              if(i4 == 0) {
+                val i5 = (lenRest >>> BITS4) & MASK
                 if(i5 == 0) {
-                  shift6(i6)
+                  shift6(lenRest >>> BITS5)
                 }
                 shift5(i5)
               }
@@ -1206,10 +1251,11 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
           }
           shift2(i2)
         }
-      }
+    }
   }
 
   def result(): NVector[A] = try {
+    val len = this.len
     val realLen = len - offset
     if(realLen == 0) NVector.empty
     else if(len <= WIDTH) {
@@ -1217,15 +1263,15 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       else new NVector1(copyOf(a1, realLen))
     } else if(len <= WIDTH2) {
       val i1 = (len-1) & MASK
-      val i2 = (len-1) >> BITS
+      val i2 = (len-1) >>> BITS
       val data = copyOfRange(a2, 1, i2)
       val prefix1 = a2(0)
       val suffix1 = copyIfDifferentSize(a2(i2), i1+1)
       new NVector2(prefix1, WIDTH-offset, data, suffix1, realLen)
     } else if(len <= WIDTH3) {
       val i1 = (len-1) & MASK
-      val i2 = ((len-1) >> BITS) & MASK
-      val i3 = ((len-1) >> BITS2)
+      val i2 = ((len-1) >>> BITS) & MASK
+      val i3 = ((len-1) >>> BITS2)
       val data = copyOfRange(a3, 1, i3)
       val prefix2 = copyTail(a3(0))
       val prefix1 = a3(0)(0)
@@ -1236,9 +1282,9 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       new NVector3(prefix1, len1, prefix2, len12, data, suffix2, suffix1, realLen)
     } else if(len <= WIDTH4) {
       val i1 = (len-1) & MASK
-      val i2 = ((len-1) >> BITS) & MASK
-      val i3 = ((len-1) >> BITS2) & MASK
-      val i4 = ((len-1) >> BITS3)
+      val i2 = ((len-1) >>> BITS) & MASK
+      val i3 = ((len-1) >>> BITS2) & MASK
+      val i4 = ((len-1) >>> BITS3)
       val data = copyOfRange(a4, 1, i4)
       val prefix3 = copyTail(a4(0))
       val prefix2 = copyTail(a4(0)(0))
@@ -1255,11 +1301,11 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
 
   private[collection] def toDebugString: String = {
     val i1 = (len-1) & MASK
-    val i2 = ((len-1) >> BITS) & MASK
-    val i3 = ((len-1) >> BITS2) & MASK
-    val i4 = ((len-1) >> BITS3) & MASK
-    val i5 = ((len-1) >> BITS4) & MASK
-    val i6 = ((len-1) >> BITS5) & MASK
+    val i2 = ((len-1) >>> BITS) & MASK
+    val i3 = ((len-1) >>> BITS2) & MASK
+    val i4 = ((len-1) >>> BITS3) & MASK
+    val i5 = ((len-1) >>> BITS4) & MASK
+    val i6 = ((len-1) >>> BITS5) & MASK
     val sb = new mutable.StringBuilder()
     sb.append(s"NVectorBuilder(len=$len, offset=$offset, depth=$depth): i1=$i1, i2=$i2, i3=$i3, i4=$i4, i5=$i5, i6=$i6\n")
     logArray(sb, a6, "  ", "a6: ")
@@ -1285,6 +1331,8 @@ private[immutable] object NVectorStatics {
   final val WIDTH4 = 1 << BITS4
   final val BITS5 = BITS * 5
   final val WIDTH5 = 1 << BITS5
+  final val BITS6 = (BITS * 6) + 1
+  final val WIDTH6 = 1 << BITS6
   final val LASTWIDTH = WIDTH << 1 // 1 extra bit in the last level to go up to Int.MaxValue (2^31-1) instead of 2^30
 
   type Arr1 = Array[AnyRef]
@@ -1458,6 +1506,7 @@ private[immutable] object NVectorStatics {
   }
   */
 
+  /*
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
     val ac: Arr1 = new Array(a.length)
     var i = 0
@@ -1485,8 +1534,8 @@ private[immutable] object NVectorStatics {
       ac.asInstanceOf[Array[T]]
     }
   }
+  */
 
-  /*
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
     var ac: Arr1 = null
     var i = 0
@@ -1534,7 +1583,6 @@ private[immutable] object NVectorStatics {
       if(ac ne null) ac.asInstanceOf[Array[T]] else a
     }
   }
-  */
 
   final def logArray[T <: AnyRef](sb: mutable.StringBuilder, a: Array[T], indent: String = "", prefix: String = "", findIn: Array[Array[T]] = null, findInName: String = "<array>"): mutable.StringBuilder = {
     def classifier(x: AnyRef): String =
@@ -1650,11 +1698,11 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
   private[this] def setA1(io: Int): Unit = {
     a1 = (sliceDim: @switch) match {
       case 1 => slice.asInstanceOf[Arr1]
-      case 2 => slice.asInstanceOf[Arr2](io >> BITS)
-      case 3 => slice.asInstanceOf[Arr3](io >> BITS2)((io >> BITS) & MASK)
-      case 4 => slice.asInstanceOf[Arr4](io >> BITS3)((io >> BITS2) & MASK)((io >> BITS) & MASK)
-      case 5 => slice.asInstanceOf[Arr5](io >> BITS4)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
-      case 6 => slice.asInstanceOf[Arr6](io >> BITS5)((io >> BITS4) & MASK)((io >> BITS3) & MASK)((io >> BITS2) & MASK)((io >> BITS) & MASK)
+      case 2 => slice.asInstanceOf[Arr2](io >>> BITS)
+      case 3 => slice.asInstanceOf[Arr3](io >>> BITS2)((io >>> BITS) & MASK)
+      case 4 => slice.asInstanceOf[Arr4](io >>> BITS3)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
+      case 5 => slice.asInstanceOf[Arr5](io >>> BITS4)((io >>> BITS3) & MASK)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
+      case 6 => slice.asInstanceOf[Arr6](io >>> BITS5)((io >>> BITS4) & MASK)((io >>> BITS3) & MASK)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
     }
     a1len = a1.length
   }
@@ -1742,7 +1790,7 @@ private[immutable] abstract class NVectorStepperBase[A, Sub >: Null <: Stepper[A
 
   def trySplit(): Sub = {
     val len = it.knownSize
-    if(len > 1) build(it.split(len >> 1))
+    if(len > 1) build(it.split(len >>> 1))
     else null
   }
 
