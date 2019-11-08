@@ -38,8 +38,7 @@ class VectorBenchmark2 {
     a = Array.fill(size)(o)
     v = Vector.fill(size)(o)
     nv = NVector.fill(size)(o)
-    nv.validateDebug()
-    NVector.fillSparse(size)(o).validateDebug()
+    NVector.fillSparse(size)(o)
     as = ArraySeq.fill(size)(o)
   }
 

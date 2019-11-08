@@ -17,11 +17,12 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.junit.runners.JUnit4
 
-import scala.collection.mutable.ListBuffer
+import scala.collection.mutable.{ListBuffer, StringBuilder}
 import scala.reflect.{ClassTag, classTag}
 
 @RunWith(classOf[JUnit4])
 class NVectorTest {
+  import NVectorUtils.validateDebug
 
   @Test
   def hasCorrectDropAndTakeMethods(): Unit = {
@@ -49,9 +50,9 @@ class NVectorTest {
 
     for (i <- 0 until els.size) {
       val (prefix, suffix) = els.splitAt(i)
-      prefix.validateDebug()
-      suffix.validateDebug()
-      (prefix ++: suffix).validateDebug
+      validateDebug(prefix)
+      validateDebug(suffix)
+      validateDebug(prefix ++: suffix)
       assertEquals(els, prefix ++: suffix)
       assertEquals(els, prefix.toList ++: suffix)
     }
@@ -318,7 +319,7 @@ class NVectorTest {
   def testAligned: Unit = for(size <- smallSizes) {
     val v = NVector.range(0, size)
     //println(v.toDebugString)
-    v.validateDebug()
+    validateDebug(v)
     assertEquals(size, v.length)
     assertEquals(0 until size, v)
   }
@@ -329,7 +330,7 @@ class NVectorTest {
     val v = 0 +: v0
     //println(v0.toDebugString)
     //println(v.toDebugString)
-    v.validateDebug()
+    validateDebug(v)
     assertEquals(size, v.length)
     assertEquals(0 until size, v)
   }
@@ -355,7 +356,7 @@ class NVectorTest {
       to <- from until size by step
     } {
       val v2 = v.slice(from, to)
-      v2.validateDebug()
+      validateDebug(v2)
       assertEquals(from until to, v2)
     }
   }
@@ -379,11 +380,11 @@ class NVectorTest {
       for(i <- prependSize to 0 by -1) {
         v = i +: v
       }
-      v.validateDebug()
+      validateDebug(v)
       val b = NVector.newBuilder[Int]
       b.addAll(v)
       val v2 = b.result()
-      v2.validateDebug()
+      validateDebug(v2)
       assertEquals(v, v2)
     }
   }
@@ -396,5 +397,137 @@ class NVectorTest {
       val v3 = v.appendedAll(v2)
       assertEquals(0 until (size + appendSize), v3)
     }
+  }
+}
+
+object NVectorUtils {
+  import NVectorStatics._
+
+  def validateDebug(v: NVector[_]): Unit = {
+    try validate(v) catch {
+      case ex: Throwable =>
+        throw new RuntimeException("Validation failed: " + ex.getMessage + "\n" + toDebugString(v), ex)
+    }
+  }
+
+  def validate(v: NVector[_]): Unit = {
+    val count = v.vectorSliceCount
+    val len = (0 until count).map(v.vectorSlicePrefixLength _)
+    val alen = (0 until count).map { i =>
+      if(i == 0 || i == (count-1)) v.vectorSlice(i).length
+      else validateArrays(v.vectorSlice(i).asInstanceOf[Array[Array[AnyRef]]], sliceName(v, i))
+    }
+    val running = alen.scanLeft(0)(_ + _).tail
+    running.zip(len).zipWithIndex.foreach { case ((r, p), i) =>
+      assert(r == p, s"sum of slice lengths ($r) at ${sliceName(v, i)} should be equal to prefix length ($p)")
+    }
+  }
+
+  def sliceName(v: NVector[_], i: Int): String = {
+    val count = v.vectorSliceCount
+    val level = (count+1)/2
+    if(i+1 == level) "data"
+    else if(i+1 < level) "prefix" + (i+1)
+    else "suffix" + (count-i)
+  }
+
+  def toDebugString(v: NVector[_]): Unit = {
+    val sb = new StringBuilder()
+    val level = (v.vectorSliceCount+1)/2
+    val len = (0 until v.vectorSliceCount).map(v.vectorSlicePrefixLength _)
+    sb.append(s"NVector$level(lenghts=[${len.mkString(", ")}])\n")
+    for(i <- 0 until v.vectorSliceCount)
+      logArray(sb, v.vectorSlice(i), "  ", s"${sliceName(v, i)}: ")
+    sb.result()
+  }
+
+  def toDebugString(v: NVectorSliceBuilder): String = {
+    val sb = new StringBuilder()
+    sb.append(s"$v\n")
+    logArray(sb, v.getSlices, "  ", "slices: ")
+    sb.result()
+  }
+
+  private def toDebugString(v: NVectorBuilder[_]): String = {
+    val sb = new StringBuilder()
+    sb.append(s"$v\n")
+    val d = v.getData.asInstanceOf[Array[Array[AnyRef]]]
+    logArray(sb, d(5), "  ", "a6: ")
+    logArray(sb, d(4), "  ", "a5: ", d(5).asInstanceOf[Array[Array[AnyRef]]], "a6")
+    logArray(sb, d(3), "  ", "a4: ", d(4).asInstanceOf[Array[Array[AnyRef]]], "a5")
+    logArray(sb, d(2), "  ", "a3: ", d(3).asInstanceOf[Array[Array[AnyRef]]], "a4")
+    logArray(sb, d(1), "  ", "a2: ", d(2).asInstanceOf[Array[Array[AnyRef]]], "a3")
+    logArray(sb, d(0), "  ", "a1: ", d(1).asInstanceOf[Array[Array[AnyRef]]], "a2")
+    sb.result()
+  }
+
+  private[this] def validateArrays[T](a: Array[Array[T]], name: String): Int = {
+    var i = 0
+    var total = 0
+    while(i < a.length) {
+      assert(a(i) ne null, s"$name($i) should not be null")
+      assert(a(i).length == WIDTH, s"$name($i) should have length $WIDTH, has ${a(i).length}")
+      if(a(i).isInstanceOf[Array[Array[AnyRef]]])
+        total += validateArrays(a(i).asInstanceOf[Array[Array[AnyRef]]], s"$name($i)")
+      else if(a(i).isInstanceOf[Array[AnyRef]])
+        total += a(i).asInstanceOf[Array[AnyRef]].length
+      i += 1
+    }
+    total
+  }
+
+  private[this] def logArray[T <: AnyRef](sb: StringBuilder, a: Array[T], indent: String = "", prefix: String = "", findIn: Array[Array[T]] = null, findInName: String = "<array>"): StringBuilder = {
+    def classifier(x: AnyRef): String =
+      if(x eq null) "-"
+      else if(x.isInstanceOf[Array[AnyRef]]) "A"
+      else if((x: Any).isInstanceOf[Int]) x.toString
+      else "o"
+    def atos(a: Array[_ <: AnyRef]): String =
+      if(a eq null) "-"
+      else {
+        var i = 0
+        var startNum: Option[Int] = None
+        var currentNum = 0
+        val b = new StringBuilder().append("[")
+        while(i < a.length) {
+          if(i != 0) b.append(",")
+          (a(i): Any) match {
+            case n: Int =>
+              if(i == 0) {
+                startNum = Some(n)
+                currentNum = n
+              } else if(startNum.isDefined) {
+                if(n == currentNum +1) currentNum = n
+                else startNum = None
+              }
+            case _ => startNum = None
+          }
+          b.append(classifier(a(i)))
+          i += 1
+        }
+        if(startNum.isDefined && startNum.get != currentNum) {
+          b.clear()
+          b.append("[").append(startNum.get).append("...").append(currentNum)
+        }
+        b.append("]").toString + " (" + a.length + ")"
+      }
+    if(a eq null)
+      sb.append(indent + prefix + "-\n")
+    else {
+      val idx = Option(findIn).map(_.indexWhere(_ eq a)).getOrElse(-1)
+      if(idx >= 0) {
+        sb.append(s"$indent$prefix= $findInName($idx)\n")
+      } else {
+        sb.append(indent + prefix + atos(a) + "\n")
+        var i = 0
+        while(i < a.length) {
+          if(a(i).isInstanceOf[Array[AnyRef]]) {
+            logArray(sb, a(i).asInstanceOf[Array[AnyRef]], indent + "  ", s"$i. ")
+          }
+          i += 1
+        }
+      }
+    }
+    sb
   }
 }

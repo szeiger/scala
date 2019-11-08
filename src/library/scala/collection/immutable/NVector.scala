@@ -24,6 +24,7 @@ import java.lang.Math.{abs, max => mmax, min => mmin}
 import NVectorStatics.{Arr1, Arr2, Arr3, Arr4, Arr5, Arr6}
 import scala.collection.Stepper.EfficientSplit
 
+
 object NVector extends StrictOptimizedSeqFactory[NVector] {
   import NVectorStatics._
 
@@ -69,7 +70,8 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * they are currently the default implementation of immutable indexed sequences.
   *
   * Vectors are implemented by radix-balanced finger trees of width 32. There is a separate subclass
-  * for each level (0 to 6, with 0 being the empty vector and 6 a tree with a maximum width of 64).
+  * for each level (0 to 6, with 0 being the empty vector and 6 a tree with a maximum width of 64 at the
+  * top level).
   *
   * Tree balancing:
   * - Only the first dimension of an array may have a size < WIDTH
@@ -78,6 +80,9 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * - Balancing does not cross the main data array (i.e. prepending never touches the suffix and appending never touches
   *   the prefix). The level is increased/decreased when the affected side plus main data is already full/empty
   * - All arrays are left-aligned and truncated
+  *
+  * In addition to the data slices (`prefix`, `prefix2`, ..., `dataN`, ..., `prefix2`, `prefix1`) we store a running
+  * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
 sealed abstract class NVector[+A]
   extends AbstractSeq[A]
@@ -109,17 +114,6 @@ sealed abstract class NVector[+A]
     } else new NVectorBuilder[B].initFrom(this).addAll(suffix).result()
   }
 
-  private[collection] def validate(): Unit
-
-  private[collection] def validateDebug(): Unit = {
-    try validate() catch {
-      case ex: Throwable =>
-        throw new RuntimeException("Validation failed: " + ex.getMessage + "\n" + toDebugString, ex)
-    }
-  }
-
-  private[collection] def toDebugString: String
-
   override def className = "NVector"
 
   @inline override final def take(n: Int): NVector[A] = slice(0, n)
@@ -140,9 +134,14 @@ sealed abstract class NVector[+A]
     else slice0(lo, hi)
   }
 
+  /** Number of slices */
   protected[immutable] def vectorSliceCount: Int
+  /** Slice at index */
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef]
+  /** Dimension of the slice at index */
   protected[immutable] def vectorSliceDim(idx: Int): Int
+  /** Length of all slices up to and including index */
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int
 
   override def iterator: Iterator[A] = new NVectorIterator(this)
 
@@ -164,6 +163,7 @@ sealed abstract class NVector[+A]
   }
 }
 
+
 /** Empty vector */
 private final object NVector0 extends NVector[Nothing] {
   import NVectorStatics._
@@ -181,10 +181,6 @@ private final object NVector0 extends NVector[Nothing] {
 
   override def foreach[U](f: Nothing => U): Unit = ()
 
-  private[collection] def validate(): Unit = ()
-
-  private[collection] def toDebugString: String = "NVector0\n"
-
   override def map[B](f: Nothing => B): NVector[B] = this
 
   override def tail: NVector[Nothing] = throw new UnsupportedOperationException("empty.tail")
@@ -196,6 +192,7 @@ private final object NVector0 extends NVector[Nothing] {
   protected[immutable] def vectorSliceCount: Int = 0
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = null
   protected[immutable] def vectorSliceDim(idx: Int): Int = -1
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = 0
 
   override def equals(o: Any): Boolean = {
     if(this eq o.asInstanceOf[AnyRef]) true
@@ -212,10 +209,8 @@ private final object NVector0 extends NVector[Nothing] {
     NVector.from(suffix)
 }
 
-/** Flat ArraySeq-like structure.
-  *
-  * @param data1 The vector's content, with length between 1 and WIDTH.
-  */
+
+/** Flat ArraySeq-like structure */
 private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   import NVectorStatics._
 
@@ -245,17 +240,6 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
 
   override def foreach[U](f: A => U): Unit = foreachElem(data1, f)
 
-  private[collection] def validate(): Unit = {
-    assert(length > 0 && length <= WIDTH, s"length is $length, should be > 0 and <= ${WIDTH}")
-  }
-
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVector1\n")
-    logArray(sb, data1, "  ", "data1: ")
-    sb.result()
-  }
-
   override def map[B](f: A => B): NVector[B] = new NVector1(mapElems1(data1, f))
 
   override def head: A = data1(0).asInstanceOf[A]
@@ -276,6 +260,7 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   protected[immutable] def vectorSliceCount: Int = 1
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = data1
   protected[immutable] def vectorSliceDim(idx: Int): Int = 1
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = data1.length
 
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit =
     data1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
@@ -287,14 +272,8 @@ private final class NVector1[+A](data1: Array[AnyRef]) extends NVector[A] {
   }
 }
 
-/** 2-level radix tree with fingers at both ends.
-  *
-  * @param prefix1 The level 1 prefix
-  * @param len1 The length of prefix1
-  * @param data2 The main data, excluding prefix and suffix.
-  * @param suffix1 The level 1 suffix
-  * @param length The actual number of elements in the vector
-  */
+
+/** 2-dimensional radix-balanced finger tree */
 private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
                                  data2: Arr2,
                                  suffix1: Array[AnyRef],
@@ -351,22 +330,6 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
     foreachElem(suffix1, f)
   }
 
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVector2(len1=$len1, length=$length)\n")
-    logArray(sb, prefix1, "  ", "prefix1: ")
-    logArray(sb, data2, "  ", "data2: ")
-    logArray(sb, suffix1, "  ", "suffix1: ")
-    sb.result()
-  }
-
-  private[collection] def validate(): Unit = {
-    assert(data2.length <= (WIDTH-2), s"data2.length is ${data2.length}, should be <= ${WIDTH-2}")
-    val d2l = validateArrays(data2, "data2")
-    assert(len1 == prefix1.length, s"len1 ($len1) should be prefix1.length (${prefix1.length})")
-    assert(len1 + d2l + suffix1.length == length, s"sum of lengths ($len1 + $d2l+ ${suffix1.length}) should be vector length ($length)")
-  }
-
   override def map[B](f: A => B): NVector[B] =
     new NVector2(mapElems1(prefix1, f), len1, mapElems(2, data2, f), mapElems1(suffix1, f), length)
 
@@ -397,6 +360,11 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
     case 2 => suffix1
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 2-abs(idx-1)
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = (idx: @switch) match {
+    case 0 => len1
+    case 1 => length - suffix1.length
+    case 2 => length
+  }
 
   override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
@@ -405,18 +373,8 @@ private final class NVector2[+A](prefix1: Array[AnyRef], len1: Int,
   }
 }
 
-/** 3-level radix tree with fingers at both ends. Max size is WIDTH for prefix1 and suffix1, WIDTH-1 for
-  * prefix2 and suffix2, and WIDTH-2 for data3.
-  *
-  * @param prefix1 The level 1 prefix
-  * @param len1 The length of prefix1
-  * @param prefix2 The level 2 prefix
-  * @param len12 The combined length of prefix 1 and all prefix2 subarrays
-  * @param data3 The main data, excluding prefix and suffix.
-  * @param suffix2 The level 2 suffix
-  * @param suffix1 The level 1 suffix
-  * @param length The actual number of elements in the vector
-  */
+
+/** 3-dimensional radix-balanced finger tree */
 private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
                                  prefix2: Arr2, len12: Int,
                                  data3: Arr3,
@@ -491,27 +449,6 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
     foreachElem(suffix1, f)
   }
 
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVector3(len1=$len1, len12=$len12, length=$length)\n")
-    logArray(sb, prefix1, "  ", "prefix1: ")
-    logArray(sb, prefix2, "  ", "prefix2: ")
-    logArray(sb, data3, "  ", "data3: ")
-    logArray(sb, suffix2, "  ", "suffix2: ")
-    logArray(sb, suffix1, "  ", "suffix1: ")
-    sb.result()
-  }
-
-  private[collection] def validate(): Unit = {
-    assert(data3.length <= (WIDTH-2), s"data3.length is ${data3.length}, should be <= ${WIDTH-2}")
-    val p2l = validateArrays(prefix2, "prefix2")
-    val d3l = validateArrays(data3, "data3")
-    val s2l = validateArrays(suffix2, "suffix2")
-    assert(len1 == prefix1.length, s"len1 ($len1) should be prefix1.length (${prefix1.length})")
-    assert(len12 == len1 + p2l, s"len12 ($len12) should be len1 + prefix2 length ($p2l)")
-    assert(len12 + d3l + s2l + suffix1.length == length, s"sum of lengths ($len12 + $d3l+ $s2l + ${suffix1.length}) should be vector length ($length)")
-  }
-
   override def map[B](f: A => B): NVector[B] =
     new NVector3(mapElems1(prefix1, f), len1, mapElems(2, prefix2, f), len12, mapElems(3, data3, f), mapElems(2, suffix2, f), mapElems1(suffix1, f), length)
 
@@ -546,6 +483,13 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
     case 4 => suffix1
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 3-abs(idx-2)
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = (idx: @switch) match {
+    case 0 => len1
+    case 1 => len12
+    case 2 => len12 + data3.length*WIDTH2
+    case 3 => length - suffix1.length
+    case 4 => length
+  }
 
   override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
@@ -554,20 +498,8 @@ private final class NVector3[+A](prefix1: Array[AnyRef], len1: Int,
   }
 }
 
-/** 4-level radix tree with fingers at both ends.
-  *
-  * @param prefix1 The level 1 prefix
-  * @param len1 The length of prefix1
-  * @param prefix2 The level 2 prefix
-  * @param len12 The combined element count of prefix 1 and 2
-  * @param prefix3 The level 3 prefix
-  * @param len12 The combined element count of prefix 1, 2 and 3
-  * @param data4 The main data, excluding prefix and suffix.
-  * @param suffix3 The level 2 suffix
-  * @param suffix2 The level 2 suffix
-  * @param suffix1 The level 1 suffix
-  * @param length The actual number of elements in the vector
-  */
+
+/** 4-dimensional radix-balanced finger tree */
 private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
                                  prefix2: Arr2, len12: Int,
                                  prefix3: Arr3, len123: Int,
@@ -658,32 +590,6 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     foreachElem(suffix1, f)
   }
 
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVector4(len1=$len1, len12=$len12, len123=$len123, length=$length)\n")
-    logArray(sb, prefix1, "  ", "prefix1: ")
-    logArray(sb, prefix2, "  ", "prefix2: ")
-    logArray(sb, prefix3, "  ", "prefix3: ")
-    logArray(sb, data4, "  ", "data4: ")
-    logArray(sb, suffix3, "  ", "suffix3: ")
-    logArray(sb, suffix2, "  ", "suffix2: ")
-    logArray(sb, suffix1, "  ", "suffix1: ")
-    sb.result()
-  }
-
-  private[collection] def validate(): Unit = {
-    assert(data4.length <= (WIDTH-2), s"data4.length is ${data4.length}, should be <= ${WIDTH-2}")
-    val p2l = validateArrays(prefix2, "prefix2")
-    val p3l = validateArrays(prefix3, "prefix3")
-    val d4l = validateArrays(data4, "data4")
-    val s3l = validateArrays(suffix3, "suffix3")
-    val s2l = validateArrays(suffix2, "suffix2")
-    assert(len1 == prefix1.length, s"len1 ($len1) should be prefix1.length (${prefix1.length})")
-    assert(len12 == len1 + p2l, s"len12 ($len12) should be len1 + prefix2 length ($p2l)")
-    assert(len123 == len1 + p2l + p3l, s"len123 ($len123) should be len1 + prefix2 length ($p2l) + prefix3 length ($p3l)")
-    assert(len123 + d4l + s3l + s2l + suffix1.length == length, s"sum of lengths ($len123 + $d4l + $s3l + $s2l + ${suffix1.length}) should be vector length ($length)")
-  }
-
   override def map[B](f: A => B): NVector[B] =
     new NVector4(mapElems1(prefix1, f), len1, mapElems(2, prefix2, f), len12, mapElems(3, prefix3, f), len123, mapElems(4, data4, f), mapElems(3, suffix3, f), mapElems(2, suffix2, f), mapElems1(suffix1, f), length)
 
@@ -722,6 +628,15 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
     case 6 => suffix1
   }
   protected[immutable] def vectorSliceDim(idx: Int): Int = 4-abs(idx-3)
+  protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = (idx: @switch) match {
+    case 0 => len1
+    case 1 => len12
+    case 2 => len123
+    case 3 => len123 + data4.length*WIDTH3
+    case 4 => len123 + data4.length*WIDTH3 + suffix3.length*WIDTH2
+    case 5 => length - suffix1.length
+    case 6 => length
+  }
 
   override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
@@ -730,6 +645,12 @@ private final class NVector4[+A](prefix1: Array[AnyRef], len1: Int,
   }
 }
 
+/** Helper class for vector slicing. It is initialized with the validated start and end index,
+  * then the vector slices are added in succession with `consider`. No matter what the dimension
+  * of the originating vector is or where the cut is performed, this always results in a
+  * structure with the highest-dimensional data in the middle and fingers of decreasing dimension
+  * at both ends, which can be turned into a new vector with very little rebalancing.
+  */
 private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   //println(s"***** NVectorSliceBuilder($lo, $hi)")
   import NVectorStatics._
@@ -821,11 +742,15 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         val pre = slices(prefixIdx(maxDim))
         val suf = slices(suffixIdx(maxDim))
         if((pre ne null) && (suf ne null)) {
+          // The highest-dimensional data consists of two slices: concatenate if they fit into the main data array,
+          // otherwise increase the dimension
           if(pre.length + suf.length <= WIDTH-2) {
             slices(prefixIdx(maxDim)) = concatArrays(pre, suf)
             slices(suffixIdx(maxDim)) = null
           } else resultDim += 1
         } else {
+          // A single highest-dimensional slice could have length WIDTH-1 if it came from a prefix or suffix but we
+          // only allow WIDTH-2 for the main data, so increase the dimension in this case
           val one = if(pre ne null) pre else suf
           if(one.length > WIDTH-2) resultDim += 1
         }
@@ -855,7 +780,6 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         case _ =>
           ???
       }
-      //res.validateDebug()
       res
     }
   }
@@ -879,6 +803,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     }
   }
 
+  /** Ensure prefix is not empty */
   private[this] def balancePrefix(n: Int): Unit = {
     if(slices(prefixIdx(n)) eq null) {
       if(n == maxDim) {
@@ -899,6 +824,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     }
   }
 
+  /** Ensure suffix is not empty */
   private[this] def balanceSuffix(n: Int): Unit = {
     if(slices(suffixIdx(n)) eq null) {
       if(n == maxDim) {
@@ -919,13 +845,12 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     }
   }
 
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVectorSliceBuilder(lo=$lo, hi=$hi, len=$len, pos=$pos, maxDim=$maxDim)\n")
-    logArray(sb, slices, "  ", "slices: ")
-    sb.result()
-  }
+  override def toString: String =
+    s"NVectorSliceBuilder(lo=$lo, hi=$hi, len=$len, pos=$pos, maxDim=$maxDim)"
+
+  private[immutable] def getSlices: Array[Array[AnyRef]] = slices
 }
+
 
 private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   import NVectorStatics._
@@ -1148,7 +1073,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     }
   }
 
-  def result(): NVector[A] = try {
+  def result(): NVector[A] = {
     val len = len1 + lenRest
     val realLen = len - offset
     if(realLen == 0) NVector.empty
@@ -1191,20 +1116,14 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val len123 = len12 + prefix3.length*WIDTH2
       new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data, suffix3, suffix2, suffix1, realLen)
     } else ???
-  } catch { case ex: Exception => println(toDebugString); throw ex }
-
-  private[collection] def toDebugString: String = {
-    val sb = new mutable.StringBuilder()
-    sb.append(s"NVectorBuilder(len1=$len1, lenRest=$lenRest, offset=$offset, depth=$depth)\n")
-    logArray(sb, a6, "  ", "a6: ")
-    logArray(sb, a5, "  ", "a5: ", a6, "a6")
-    logArray(sb, a4, "  ", "a4: ", a5, "a5")
-    logArray(sb, a3, "  ", "a3: ", a4, "a4")
-    logArray(sb, a2, "  ", "a2: ", a3, "a3")
-    logArray(sb, a1, "  ", "a1: ", a2, "a2")
-    sb.result()
   }
+
+  override def toString: String =
+    s"NVectorBuilder(len1=$len1, lenRest=$lenRest, offset=$offset, depth=$depth)"
+
+  private[immutable] def getData: Array[Array[_]] = Array(a1, a2, a3, a4, a5, a6)
 }
+
 
 private[immutable] object NVectorStatics {
   // compile-time numeric constants
@@ -1446,77 +1365,8 @@ private[immutable] object NVectorStatics {
     }
     ac.asInstanceOf[Array[T]]
   }
-
-  final def logArray[T <: AnyRef](sb: mutable.StringBuilder, a: Array[T], indent: String = "", prefix: String = "", findIn: Array[Array[T]] = null, findInName: String = "<array>"): mutable.StringBuilder = {
-    def classifier(x: AnyRef): String =
-      if(x eq null) "-"
-      else if(x.isInstanceOf[Array[AnyRef]]) "A"
-      else if((x: Any).isInstanceOf[Int]) x.toString
-      else "o"
-    def atos(a: Array[_ <: AnyRef]): String =
-      if(a eq null) "-"
-      else {
-        var i = 0
-        var startNum: Option[Int] = None
-        var currentNum = 0
-        val b = new mutable.StringBuilder().append("[")
-        while(i < a.length) {
-          if(i != 0) b.append(",")
-          (a(i): Any) match {
-            case n: Int =>
-              if(i == 0) {
-                startNum = Some(n)
-                currentNum = n
-              } else if(startNum.isDefined) {
-                if(n == currentNum +1) currentNum = n
-                else startNum = None
-              }
-            case _ => startNum = None
-          }
-          b.append(classifier(a(i)))
-          i += 1
-        }
-        if(startNum.isDefined && startNum.get != currentNum) {
-          b.clear()
-          b.append("[").append(startNum.get).append("...").append(currentNum)
-        }
-        b.append("]").toString + " (" + a.length + ")"
-      }
-    if(a eq null)
-      sb.append(indent + prefix + "-\n")
-    else {
-      val idx = Option(findIn).map(_.indexWhere(_ eq a)).getOrElse(-1)
-      if(idx >= 0) {
-        sb.append(s"$indent$prefix= $findInName($idx)\n")
-      } else {
-        sb.append(indent + prefix + atos(a) + "\n")
-        var i = 0
-        while(i < a.length) {
-          if(a(i).isInstanceOf[Array[AnyRef]]) {
-            logArray(sb, a(i).asInstanceOf[Array[AnyRef]], indent + "  ", s"$i. ")
-          }
-          i += 1
-        }
-      }
-    }
-    sb
-  }
-
-  def validateArrays[T](a: Array[Array[T]], name: String): Int = {
-    var i = 0
-    var total = 0
-    while(i < a.length) {
-      assert(a(i) ne null, s"$name($i) should not be null")
-      assert(a(i).length == WIDTH, s"$name($i) should have length $WIDTH, has ${a(i).length}")
-      if(a(i).isInstanceOf[Array[Array[AnyRef]]])
-        total += validateArrays(a(i).asInstanceOf[Array[Array[AnyRef]]], s"$name($i)")
-      else if(a(i).isInstanceOf[Array[AnyRef]])
-        total += a(i).asInstanceOf[Array[AnyRef]].length
-      i += 1
-    }
-    total
-  }
 }
+
 
 private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] with java.lang.Cloneable {
   import NVectorStatics._
