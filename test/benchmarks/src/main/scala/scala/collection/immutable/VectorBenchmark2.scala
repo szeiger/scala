@@ -19,7 +19,7 @@ import scala.collection.IterableOps
 @State(Scope.Benchmark)
 class VectorBenchmark2 {
 
-  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000" /*, "2000", "1000000" */))
+  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000", "5000000", "50000000" /*, "2000", "1000000" */))
   //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000"))
   //@Param(Array("1", "5", "10"))
   //@Param(Array("2000", "10000"))
@@ -35,10 +35,10 @@ class VectorBenchmark2 {
   var as: ArraySeq[AnyRef] = _
 
   @Setup(Level.Trial) def init: Unit = {
-    a = Array.fill(size)(o)
+    //a = Array.fill(size)(o)
     v = Vector.fill(size)(o)
     nv = NVector.fill(size)(o)
-    NVector.fillSparse(size)(o)
+    //NVector.fillSparse(size)(o)
     as = ArraySeq.fill(size)(o)
   }
 
@@ -48,7 +48,7 @@ class VectorBenchmark2 {
 
   @Benchmark def vApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 100000) {
+    while(i < 1000000) {
       bh.consume(v(i % size))
       i += 1
     }
@@ -56,7 +56,7 @@ class VectorBenchmark2 {
 
   @Benchmark def vApplyRandom(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 1000000) {
       bh.consume(v(rand.nextInt(size)))
       i += 1
     }
@@ -118,7 +118,7 @@ class VectorBenchmark2 {
   @Benchmark def vUpdateRandom(bh: Blackhole): Any = {
     var v = this.v
     var i = 0
-    while(i < 1000) {
+    while(i < 100) {
       v = v.updated(rand.nextInt(size), o)
       i += 1
     }
@@ -130,6 +130,15 @@ class VectorBenchmark2 {
     var i = 0
     while(i < 1000) {
       bh.consume(coll.head)
+      i += 1
+    }
+  }
+
+  @Benchmark def vLast(bh: Blackhole): Any = {
+    var coll = v
+    var i = 0
+    while(i < 1000) {
+      bh.consume(coll.last)
       i += 1
     }
   }
@@ -192,7 +201,7 @@ class VectorBenchmark2 {
     var coll = v
     val coll1 = as
     var i = 0
-    while(i < 100) {
+    while(i < 10) {
       coll = coll.appendedAll(coll1)
       i += 1
     }
@@ -203,7 +212,7 @@ class VectorBenchmark2 {
     var coll = v
     val coll1 = v
     var i = 0
-    while(i < 100) {
+    while(i < 10) {
       coll = coll.appendedAll(coll1)
       i += 1
     }
@@ -217,7 +226,7 @@ class VectorBenchmark2 {
 
   @Benchmark def asApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 100000) {
+    while(i < 1000000) {
       bh.consume(as(i % size))
       i += 1
     }
@@ -225,7 +234,7 @@ class VectorBenchmark2 {
 
   @Benchmark def asApplyRandom(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 1000000) {
       bh.consume(as(rand.nextInt(size)))
       i += 1
     }
@@ -270,7 +279,7 @@ class VectorBenchmark2 {
 
   @Benchmark def aApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 100000) {
+    while(i < 1000000) {
       bh.consume(a(i % size))
       i += 1
     }
@@ -278,7 +287,7 @@ class VectorBenchmark2 {
 
   @Benchmark def aApplyRandom(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 1000000) {
       bh.consume(a(rand.nextInt(size)))
       i += 1
     }
@@ -313,7 +322,7 @@ class VectorBenchmark2 {
 
   @Benchmark def nvApplySequential(bh: Blackhole): Any = {
     var i = 0
-    while(i < 100000) {
+    while(i < 1000000) {
       bh.consume(nv(i % size))
       i += 1
     }
@@ -321,7 +330,7 @@ class VectorBenchmark2 {
 
   @Benchmark def nvApplyRandom(bh: Blackhole): Any = {
     var i = 0
-    while(i < 1000) {
+    while(i < 1000000) {
       bh.consume(nv(rand.nextInt(size)))
       i += 1
     }
@@ -387,7 +396,7 @@ class VectorBenchmark2 {
   @Benchmark def nvUpdateRandom(bh: Blackhole): Any = {
     var nv = this.nv
     var i = 0
-    while(i < 1000) {
+    while(i < 100) {
       nv = nv.updated(rand.nextInt(size), o)
       i += 1
     }
@@ -399,6 +408,15 @@ class VectorBenchmark2 {
     var i = 0
     while(i < 1000) {
       bh.consume(coll.head)
+      i += 1
+    }
+  }
+
+  @Benchmark def nvLast(bh: Blackhole): Any = {
+    var coll = nv
+    var i = 0
+    while(i < 1000) {
+      bh.consume(coll.last)
       i += 1
     }
   }
@@ -461,7 +479,7 @@ class VectorBenchmark2 {
     var coll = nv
     val coll1 = as
     var i = 0
-    while(i < 100) {
+    while(i < 10) {
       coll = coll.appendedAll(coll1)
       i += 1
     }
@@ -472,7 +490,7 @@ class VectorBenchmark2 {
     var coll = nv
     val coll1 = nv
     var i = 0
-    while(i < 100) {
+    while(i < 10) {
       coll = coll.appendedAll(coll1)
       i += 1
     }

@@ -38,22 +38,23 @@
 
     function drawCharts() {
       drawChart(new ChartData("Append individual elements of same total size", benchmarkData.Append));
-      drawChart(new ChartData("Apply with random index 1000 times", benchmarkData.ApplyRandom));
-      drawChart(new ChartData("Apply sequentially 100000 elements", benchmarkData.ApplySequential));
+      drawChart(new ChartData("Apply with random index 1000000 elements", benchmarkData.ApplyRandom));
+      drawChart(new ChartData("Apply sequentially 1000000 elements", benchmarkData.ApplySequential));
       drawChart(new ChartData("Alternating append/prepend elements of same total size", benchmarkData.Apprepend));
       drawChart(new ChartData("Build with Builder", benchmarkData.Build));
-      drawChart(new ChartData("AppendedAll non-Vector of same size (100 times)", benchmarkData.BulkAppend100p));
+      drawChart(new ChartData("AppendedAll non-Vector of same size (10 times)", benchmarkData.BulkAppend100p));
       drawChart(new ChartData("AppendedAll non-Vector of 1/10 the size (100 times)", benchmarkData.BulkAppend10p));
       drawChart(new ChartData("AppendedAll 2 elements (100 times)", benchmarkData.BulkAppend2));
-      drawChart(new ChartData("AppendedAll same Vector (100 times)", benchmarkData.BulkAppendSame));
+      drawChart(new ChartData("AppendedAll same Vector (10 times)", benchmarkData.BulkAppendSame));
       drawChart(new ChartData("Iterate with foreach", benchmarkData.Foreach));
       drawChart(new ChartData("Head (1000 times)", benchmarkData.Head));
+      drawChart(new ChartData("Last (1000 times)", benchmarkData.Last));
       drawChart(new ChartData("Iterate with Iterator", benchmarkData.Iterator));
       drawChart(new ChartData("Map(identity)", benchmarkData.MapIdentity));
       drawChart(new ChartData("Map to new value", benchmarkData.MapNew));
       drawChart(new ChartData("Prepend individual elements of same total size", benchmarkData.Prepend));
       drawChart(new ChartData("Tail (1000 times)", benchmarkData.Tail));
-      drawChart(new ChartData("Update with random index 1000 times", benchmarkData.UpdateRandom));
+      drawChart(new ChartData("Update with random index 100 times", benchmarkData.UpdateRandom));
       drawChart(new ChartData("Update sequentially 1000 times", benchmarkData.UpdateSequential));
     }
 

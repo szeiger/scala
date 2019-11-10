@@ -50,6 +50,13 @@ object GenerateVectorBenchmark2Charts extends App {
     else s
   }
 
+  def fmtSize(i: Int): String = {
+    if(i >= 1000000000) s"${i/1000000000}B"
+    else if(i >= 1000000) s"${i/1000000}M"
+    else if(i >= 1000) s"${i/1000}K"
+    else s"$i"
+  }
+
   def printChartData(out: PrintWriter, name: String, rss: IndexedSeq[IndexedSeq[Result]], seriesNames: IndexedSeq[String]): Unit = {
     println(s"""drawChart(new ChartData("$name", benchmarkData.$name));""")
     val sizes = rss.flatten.map(_.size).toSet.toIndexedSeq.sorted
@@ -74,6 +81,7 @@ object GenerateVectorBenchmark2Charts extends App {
     sizes.foreach { size =>
       if(!first) out.println(",")
       else first = false
+      val sizeStr = fmtSize(size)
       val forSize = bySize.map(_.get(size))
       val minScore = forSize.map(_.map(_.score)).flatten.min
       val line = forSize.zipWithIndex.map { case (ro, i) => ro.map { r =>
@@ -81,7 +89,7 @@ object GenerateVectorBenchmark2Charts extends App {
           r.score/timeFactor,
           (r.score-r.error)/timeFactor,
           (r.score+r.error)/timeFactor,
-          "\"" + seriesNames(i) + ": <b>" + fmtTime(r.score, minScore, true) + "</b> ± " + fmtTime(r.error, minScore, false) + "\""
+          "\"Size: " + sizeStr + "<br/>" + seriesNames(i) + ": <b>" + fmtTime(r.score, minScore, true) + "</b> ± " + fmtTime(r.error, minScore, false) + "\""
         )
       }.getOrElse(Seq(null, null, null, null)) }.flatten
       out.print(s"      [$size, ${line.mkString(", ")}]")
