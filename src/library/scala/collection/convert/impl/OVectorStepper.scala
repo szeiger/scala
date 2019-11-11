@@ -15,7 +15,7 @@ package impl
 
 import scala.collection._
 
-private[convert] abstract class VectorStepperBase[Sub >: Null, Semi <: Sub](
+private[convert] abstract class OVectorStepperBase[Sub >: Null, Semi <: Sub](
   _i0: Int,
   _iN: Int,
   protected val displayN: Int,
@@ -58,8 +58,8 @@ extends IndexedStepperBase[Sub, Semi](_i0, _iN) {
   }
 }
 
-private[collection] class AnyVectorStepper[A](_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
-extends VectorStepperBase[AnyStepper[A], AnyVectorStepper[A]](_i0, _iN, _displayN, _trunk)
+private[collection] class AnyOVectorStepper[A](_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
+extends OVectorStepperBase[AnyStepper[A], AnyOVectorStepper[A]](_i0, _iN, _displayN, _trunk)
 with AnyStepper[A] {
   def nextStep(): A = if (hasStep) {
     index += 1
@@ -67,8 +67,8 @@ with AnyStepper[A] {
     i0 += 1
     leaves(index).asInstanceOf[A]
   } else Stepper.throwNSEE()
-  def semiclone(half: Int): AnyVectorStepper[A] = {
-    val ans = new AnyVectorStepper[A](i0, half, displayN, trunk)
+  def semiclone(half: Int): AnyOVectorStepper[A] = {
+    val ans = new AnyOVectorStepper[A](i0, half, displayN, trunk)
     index = 32
     index1 = 32
     i0 = half
@@ -76,8 +76,8 @@ with AnyStepper[A] {
   }
 }
 
-private[collection] class DoubleVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
-extends VectorStepperBase[DoubleStepper, DoubleVectorStepper](_i0, _iN, _displayN, _trunk)
+private[collection] class DoubleOVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
+extends OVectorStepperBase[DoubleStepper, DoubleOVectorStepper](_i0, _iN, _displayN, _trunk)
 with DoubleStepper {
   def nextStep(): Double = if (hasStep) {
     index += 1
@@ -85,17 +85,17 @@ with DoubleStepper {
     i0 += 1
     leaves(index).asInstanceOf[Double]
   } else Stepper.throwNSEE()
-  def semiclone(half: Int): DoubleVectorStepper = {
-    val ans = new DoubleVectorStepper(i0, half, displayN, trunk)
+  def semiclone(half: Int): DoubleOVectorStepper = {
+    val ans = new DoubleOVectorStepper(i0, half, displayN, trunk)
     index = 32
     index1 = 32
     i0 = half
     ans
-  }    
+  }
 }
 
-private[collection] class IntVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
-extends VectorStepperBase[IntStepper, IntVectorStepper](_i0, _iN, _displayN, _trunk)
+private[collection] class IntOVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
+extends OVectorStepperBase[IntStepper, IntOVectorStepper](_i0, _iN, _displayN, _trunk)
 with IntStepper {
   def nextStep(): Int = if (hasStep) {
     index += 1
@@ -103,17 +103,17 @@ with IntStepper {
     i0 += 1
     leaves(index).asInstanceOf[Int]
   } else Stepper.throwNSEE()
-  def semiclone(half: Int): IntVectorStepper = {
-    val ans = new IntVectorStepper(i0, half, displayN, trunk)
+  def semiclone(half: Int): IntOVectorStepper = {
+    val ans = new IntOVectorStepper(i0, half, displayN, trunk)
     index = 32
     index1 = 32
     i0 = half
     ans
-  }    
+  }
 }
 
-private[collection] class LongVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
-extends VectorStepperBase[LongStepper, LongVectorStepper](_i0, _iN, _displayN, _trunk)
+private[collection] class LongOVectorStepper(_i0: Int, _iN: Int, _displayN: Int, _trunk: Array[AnyRef])
+extends OVectorStepperBase[LongStepper, LongOVectorStepper](_i0, _iN, _displayN, _trunk)
 with LongStepper {
   def nextStep(): Long = if (hasStep) {
     index += 1
@@ -121,8 +121,8 @@ with LongStepper {
     i0 += 1
     leaves(index).asInstanceOf[Long]
   } else Stepper.throwNSEE()
-  def semiclone(half: Int): LongVectorStepper = {
-    val ans = new LongVectorStepper(i0, half, displayN, trunk)
+  def semiclone(half: Int): LongOVectorStepper = {
+    val ans = new LongOVectorStepper(i0, half, displayN, trunk)
     index = 32
     index1 = 32
     i0 = half

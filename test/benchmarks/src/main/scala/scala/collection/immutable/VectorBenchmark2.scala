@@ -31,14 +31,14 @@ class VectorBenchmark2 {
 
   var a: Array[AnyRef] = _
   var v: Vector[AnyRef] = _
-  var nv: NVector[AnyRef] = _
+  var nv: OVector[AnyRef] = _
   var as: ArraySeq[AnyRef] = _
 
   @Setup(Level.Trial) def init: Unit = {
     //a = Array.fill(size)(o)
     v = Vector.fill(size)(o)
-    nv = NVector.fill(size)(o)
-    //NVector.fillSparse(size)(o)
+    //Vector.fillSparse(size)(o)
+    nv = OVector.fill(size)(o)
     as = ArraySeq.fill(size)(o)
   }
 
@@ -317,7 +317,7 @@ class VectorBenchmark2 {
   */
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
-  // NVector
+  // OVector
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
   @Benchmark def nvApplySequential(bh: Blackhole): Any = {
@@ -370,7 +370,7 @@ class VectorBenchmark2 {
   }
 
   @Benchmark def nvBuild(bh: Blackhole): Any = {
-    val b = NVector.newBuilder[AnyRef]
+    val b = OVector.newBuilder[AnyRef]
     var i = 0
     while(i < size) {
       b.addOne(o)
@@ -380,7 +380,7 @@ class VectorBenchmark2 {
   }
 
   @Benchmark def nvFillSparse(bh: Blackhole): Any = {
-    bh.consume(NVector.fillSparse(size)(o))
+    bh.consume(OVector.fillSparse(size)(o))
   }
 
   @Benchmark def nvUpdateSequential(bh: Blackhole): Any = {
@@ -455,7 +455,7 @@ class VectorBenchmark2 {
 
   @Benchmark def nvBulkAppend2(bh: Blackhole): Any = {
     var coll = nv
-    val coll1 = NVector.fill(2)(o)
+    val coll1 = OVector.fill(2)(o)
     var i = 0
     while(i < 100) {
       coll = coll.appendedAll(coll1)
