@@ -151,6 +151,17 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorPointer.nullSlotAndCopy$default$3"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.mutable.HashMap.mapValuesInPlaceImpl"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.RedBlackTree.countInRange"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OVector"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OVector$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.Vector0$"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.IntOVectorStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.OVectorStepperBase"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.AnyOVectorStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.DoubleOVectorStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.convert.impl.LongOVectorStepper"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OVectorBuilder"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OVectorIterator"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OVectorPointer"),
   ),
 }
 
