@@ -164,6 +164,9 @@ sealed abstract class NVector[+A]
     }
     s.asInstanceOf[S with EfficientSplit]
   }
+
+  protected[this] def ioob(index: Int): IndexOutOfBoundsException =
+    new IndexOutOfBoundsException(s"$index is out of bounds (min 0, max ${length-1})")
 }
 
 
@@ -172,9 +175,9 @@ private final object NVector0 extends NVector[Nothing] {
   import NVectorStatics._
 
   def length = 0
-  def apply(index: Int) = throw new IndexOutOfBoundsException
+  def apply(index: Int) = throw ioob(index)
 
-  override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw new IndexOutOfBoundsException
+  override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw ioob(index)
 
   override def appended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
 
@@ -209,6 +212,9 @@ private final object NVector0 extends NVector[Nothing] {
 
   override protected[this]def appendedAll0[B >: Nothing](suffix: collection.IterableOnce[B], k: Int): NVector[B] =
     NVector.from(suffix)
+
+  override protected[this] def ioob(index: Int) =
+    new IndexOutOfBoundsException(s"$index is out of bounds (empty vector)")
 }
 
 
@@ -218,10 +224,12 @@ private final class NVector1[+A](data1: Arr1) extends NVector[A] {
 
   @inline def length = data1.length
 
-  @inline def apply(index: Int): A = data1(index).asInstanceOf[A]
+  @inline def apply(index: Int): A =
+    try data1(index).asInstanceOf[A]
+    catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     new NVector1(copyUpdate(data1, index, elem))
   }
 
@@ -288,7 +296,7 @@ private final class NVector2[+A](prefix1: Arr1, len1: Int,
     new NVector2(prefix1, len1, data2, suffix1, length)
 
   @inline def apply(index: Int): A = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1) {
       val io = index - len1
       val i2 = io >>> BITS
@@ -299,7 +307,7 @@ private final class NVector2[+A](prefix1: Arr1, len1: Int,
   }.asInstanceOf[A]
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1) {
       val io = index - len1
       val i2 = io >>> BITS
@@ -388,7 +396,7 @@ private final class NVector3[+A](prefix1: Arr1, len1: Int,
     new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, suffix1, length)
 
   @inline def apply(index: Int): A = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12) {
       val io = index - len12
       val i3 = io >>> BITS2
@@ -404,7 +412,7 @@ private final class NVector3[+A](prefix1: Arr1, len1: Int,
   }.asInstanceOf[A]
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12) {
       val io = index - len12
       val i3 = io >>> BITS2
@@ -512,7 +520,7 @@ private final class NVector4[+A](prefix1: Arr1, len1: Int,
     new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length)
 
   @inline def apply(index: Int): A = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len123) {
       val io = index - len123
       val i4 = io >>> BITS3
@@ -533,7 +541,7 @@ private final class NVector4[+A](prefix1: Arr1, len1: Int,
   }.asInstanceOf[A]
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len123) {
       val io = index - len123
       val i4 = io >>> BITS3
@@ -658,7 +666,7 @@ private final class NVector5[+A](prefix1: Arr1, len1: Int,
     new NVector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, length)
 
   @inline def apply(index: Int): A = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1234) {
       val io = index - len1234
       val i5 = io >>> BITS4
@@ -684,7 +692,7 @@ private final class NVector5[+A](prefix1: Arr1, len1: Int,
   }.asInstanceOf[A]
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len1234) {
       val io = index - len1234
       val i5 = io >>> BITS4
@@ -826,7 +834,7 @@ private final class NVector6[+A](prefix1: Arr1, len1: Int,
     new NVector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, length)
 
   @inline def apply(index: Int): A = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12345) {
       val io = index - len12345
       val i6 = io >>> BITS5
@@ -857,7 +865,7 @@ private final class NVector6[+A](prefix1: Arr1, len1: Int,
   }.asInstanceOf[A]
 
   override def updated[B >: A](index: Int, elem: B): NVector[B] = {
-    if(index < 0 || index >= length) throw new IndexOutOfBoundsException
+    if(index < 0 || index >= length) throw ioob(index)
     if(index >= len12345) {
       val io = index - len12345
       val i6 = io >>> BITS5
