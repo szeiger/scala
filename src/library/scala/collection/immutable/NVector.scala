@@ -75,13 +75,14 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   *
   * Tree balancing:
   * - Only the first dimension of an array may have a size < WIDTH
-  * - In a `data` (central) array the first dimension may be up to WIDTH-2, in a prefix or suffix WIDTH-1
-  * - prefix1 and suffix1 are never empty
+  * - In a `data` (central) array the first dimension may be up to WIDTH-2 long, in `prefix1` and `suffix1` up
+  *   to WIDTH, and in other `prefix` and `suffix` arrays up to WIDTH-1
+  * - `prefix1` and `suffix1` are never empty
   * - Balancing does not cross the main data array (i.e. prepending never touches the suffix and appending never touches
   *   the prefix). The level is increased/decreased when the affected side plus main data is already full/empty
   * - All arrays are left-aligned and truncated
   *
-  * In addition to the data slices (`prefix`, `prefix2`, ..., `dataN`, ..., `prefix2`, `prefix1`) we store a running
+  * In addition to the data slices (`prefix1`, `prefix2`, ..., `dataN`, ..., `suffix2`, `suffix1`) we store a running
   * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
 sealed abstract class NVector[+A]
@@ -1014,7 +1015,6 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   private[this] var len, pos, maxDim = 0
 
   @inline private[this] def prefixIdx(n: Int) = n-1
-  private[this] final val DATA6 = 5
   @inline private[this] def suffixIdx(n: Int) = 11-n
 
   def consider[T <: AnyRef](n: Int, a: Array[T]): Unit = {
@@ -1688,12 +1688,6 @@ private[immutable] object NVectorStatics {
     val a1c = a1.clone()
     a1c(idx1) = elem.asInstanceOf[AnyRef]
     a1c
-  }
-
-  @inline final def copyUpdate(a2: Arr2, idx2: Int, elem: Arr1): Arr2 = {
-    val a2c = a2.clone()
-    a2c(idx2) = elem
-    a2c
   }
 
   @inline final def copyUpdate(a2: Arr2, idx2: Int, idx1: Int, elem: Any): Arr2 = {
