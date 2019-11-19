@@ -12,7 +12,7 @@
 
 package scala.collection.immutable
 
-import java.io.{BufferedWriter, FileWriter, PrintWriter}
+import java.io.{BufferedWriter, File, FileWriter, PrintWriter}
 import java.text.DecimalFormat
 
 import scala.io.Source
@@ -27,17 +27,33 @@ import scala.io.Source
   *   bench/runMain scala.collection.immutable.GenerateVectorBenchmark2Charts test/benchmarks/vector-bench.csv test/benchmarks/vector-bench-data.js
   */
 object GenerateVectorBenchmark2Charts extends App {
-  case class Result(name: String, score: Double, error: Double, size: Int)
-  val data = Source.fromFile(args(0), "UTF8").getLines().drop(1).map { s =>
-    val a = s.split(',')
-    def unquote(s: String): String = s.substring(1, s.length-1)
-    def local(s: String): String = {
-      val i = s.lastIndexOf('.')
-      if(i < 0) s else s.substring(i+1)
-    }
-    Result(local(unquote(a(0))), a(4).toDouble, a(5).toDouble, a(7).toInt)
-  }.toIndexedSeq.groupBy(_.name)
 
+  case class Result(name: String, score: Double, error: Double, size: Int)
+
+  def load(path: String): Map[String, IndexedSeq[Result]] = {
+    val f = new File(path)
+    if(f.getName.endsWith("*")) {
+      val dir = f.getParentFile
+      val prefix = f.getName.init
+      val files = dir.listFiles().toSeq.filter(_.getName.startsWith(prefix))
+      files.foldLeft(Map.empty[String, IndexedSeq[Result]])({ (m, f) => m ++ load(f) })
+    } else load(f)
+  }
+
+  def load(file: File): Map[String, IndexedSeq[Result]] = {
+    println(s"Loading $file...")
+    Source.fromFile(file, "UTF8").getLines().drop(1).map { s =>
+      val a = s.split(',')
+      def unquote(s: String): String = s.substring(1, s.length-1)
+      def local(s: String): String = {
+        val i = s.lastIndexOf('.')
+        if(i < 0) s else s.substring(i+1)
+      }
+      Result(local(unquote(a(0))), a(4).toDouble, a(5).toDouble, a(7).toInt)
+    }.toIndexedSeq.groupBy(_.name)
+  }
+
+  val data = args.toSeq.init.foldLeft(Map.empty[String, IndexedSeq[Result]])({ (m, s) => m ++ load(s) })
   val fmt3 = new DecimalFormat("###,###.###")
 
   def fmtTime(ns: Double, by: Double, withUnit: Boolean): String = {
@@ -106,7 +122,7 @@ object GenerateVectorBenchmark2Charts extends App {
     data.get("v"+s).map(v => (s, data("nv"+s), v))
   }.flatten
 
-  val out = new PrintWriter(new BufferedWriter(new FileWriter(args(1))))
+  val out = new PrintWriter(new BufferedWriter(new FileWriter(args(args.length-1))))
   out.println("var benchmarkData = {")
 
   var first = true
