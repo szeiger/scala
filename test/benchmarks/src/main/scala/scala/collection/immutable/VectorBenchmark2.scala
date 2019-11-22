@@ -1,5 +1,6 @@
 package scala.collection.immutable
 
+import java.lang.management.ManagementFactory
 import java.util.concurrent.TimeUnit
 
 import org.openjdk.jmh.annotations._
@@ -14,12 +15,13 @@ import scala.collection.IterableOps
 @Fork(2)
 @Threads(1)
 @Warmup(iterations = 5)
-@Measurement(iterations = 5)
+@Measurement(iterations = 20)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
 class VectorBenchmark2 {
 
-  @Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000", "5000000", "50000000" /*, "2000", "1000000" */))
+  //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000", "50000", "500000", "5000000", "50000000"))
+  @Param(Array("1", "10", "100", "1000", "10000", "50000"))
   //@Param(Array("1", "5", "10", "100", "1000", "2000", "10000"))
   //@Param(Array("1", "5", "10"))
   //@Param(Array("2000", "10000"))
@@ -40,6 +42,7 @@ class VectorBenchmark2 {
     nv = NVector.fill(size)(o)
     //NVector.fillSparse(size)(o)
     as = ArraySeq.fill(size)(o)
+    //println(s"init: size = $size, JVM: " + ManagementFactory.getRuntimeMXBean().getName())
   }
 
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
