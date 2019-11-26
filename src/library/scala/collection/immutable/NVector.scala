@@ -61,6 +61,13 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
       b.result()
     }
   }
+
+  private val defaultApplyPreferredMaxLength: Int =
+    try System.getProperty("scala.collection.immutable.Vector.defaultApplyPreferredMaxLength",
+      "250").toInt
+    catch {
+      case _: SecurityException => 250
+    }
 }
 
 
@@ -153,7 +160,7 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
 
   //override def toVector: Vector[A] = this
 
-  //override protected def applyPreferredMaxLength: Int = Vector.defaultApplyPreferredMaxLength
+  override protected def applyPreferredMaxLength: Int = NVector.defaultApplyPreferredMaxLength
 
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
     import convert.impl._
