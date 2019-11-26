@@ -1033,10 +1033,10 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       val bitsN = BITS * (n-1)
       var loN = lo >>> bitsN
       var hiN = hi >>> bitsN
-      if(n != 6) {
+      /*if(n != 6) {
         loN &= MASK
         hiN &= MASK
-      }
+      }*/
       val loRest = lo & ((1 << bitsN) - 1)
       val hiRest = hi & ((1 << bitsN) - 1)
       //println(s"*****       bitsN=$bitsN, loN=$loN, hiN=$hiN, loRest=$loRest, hiRest=$hiRest")
@@ -1048,12 +1048,16 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           addSlice(n-1, a(hiN).asInstanceOf[Array[AnyRef]], 0, hiRest)
         }
       } else {
-        addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, 1 << bitsN)
-        if(hiRest == 0) {
-          if(hiN > loN+1) add(n, copyOrUse(a, loN+1, hiN))
+        if(hiN == loN) {
+          addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, hiRest)
         } else {
-          if(hiN-1 > loN+1) add(n, copyOrUse(a, loN+1, hiN-1))
-          addSlice(n-1, a(hiN-1).asInstanceOf[Array[AnyRef]], 0, hiRest)
+          addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, 1 << bitsN)
+          if(hiRest == 0) {
+            if(hiN > loN+1) add(n, copyOrUse(a, loN+1, hiN))
+          } else {
+            if(hiN-1 > loN+1) add(n, copyOrUse(a, loN+1, hiN-1))
+            addSlice(n-1, a(hiN-1).asInstanceOf[Array[AnyRef]], 0, hiRest)
+          }
         }
       }
     }

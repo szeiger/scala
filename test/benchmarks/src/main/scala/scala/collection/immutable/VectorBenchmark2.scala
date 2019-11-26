@@ -14,7 +14,7 @@ import scala.collection.IterableOps
 @BenchmarkMode(Array(Mode.AverageTime))
 @Fork(2)
 @Threads(1)
-@Warmup(iterations = 5)
+@Warmup(iterations = 10)
 @Measurement(iterations = 20)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 @State(Scope.Benchmark)
@@ -154,6 +154,22 @@ class VectorBenchmark2 {
       bh.consume(coll)
       if(coll.isEmpty) coll = coll1
       i += 1
+    }
+  }
+
+  @Benchmark def vSlice(bh: Blackhole): Any = {
+    var coll = v
+    val inc = size / 10
+    if(inc > 0) {
+      var i = 0
+      while(i < size) {
+        var j = i + inc
+        while(j < size) {
+          bh.consume(coll.slice(i, j))
+          j += inc
+        }
+        i += inc
+      }
     }
   }
 
@@ -432,6 +448,22 @@ class VectorBenchmark2 {
       bh.consume(coll)
       if(coll.isEmpty) coll = coll1
       i += 1
+    }
+  }
+
+  @Benchmark def nvSlice(bh: Blackhole): Any = {
+    var coll = nv
+    val inc = size / 10
+    if(inc > 0) {
+      var i = 0
+      while(i < size) {
+        var j = i + inc
+        while(j < size) {
+          bh.consume(coll.slice(i, j))
+          j += inc
+        }
+        i += inc
+      }
     }
   }
 

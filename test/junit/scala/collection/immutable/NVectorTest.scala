@@ -362,6 +362,26 @@ class NVectorTest {
   }
 
   @Test
+  def testSlice2: Unit = for(size <- Seq(10, 100, 1000, 10000)) {
+    val o = new AnyRef
+    var coll = NVector.fill(size)(o)
+    val inc = size / 10
+    if(inc > 0) {
+      var i = 0
+      while(i < size) {
+        var j = i + inc
+        while(j < size) {
+          //println(s"--- $i, $j")
+          //println(NVectorUtils.toDebugString(coll))
+          coll.slice(i, j)
+          j += inc
+        }
+        i += inc
+      }
+    }
+  }
+
+  @Test
   def testTail: Unit = for(size <- verySmallSizes) {
     var i = 0
     var v = NVector.range(0, size)
@@ -431,7 +451,7 @@ object NVectorUtils {
     else "suffix" + (count-i)
   }
 
-  def toDebugString(v: NVector[_]): Unit = {
+  def toDebugString(v: NVector[_]): String = {
     val sb = new StringBuilder()
     val level = (v.vectorSliceCount+1)/2
     val len = (0 until v.vectorSliceCount).map(v.vectorSlicePrefixLength _)
