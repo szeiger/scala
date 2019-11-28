@@ -150,8 +150,6 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
   /** Length of all slices up to and including index */
   protected[immutable] def vectorSlicePrefixLength(idx: Int): Int
 
-  override def iterator: Iterator[A] = new NVectorIterator(this)
-
   override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = iterator.copyToArray(xs, start, len)
 
   //override def toVector: Vector[A] = this
@@ -161,10 +159,10 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
     import convert.impl._
     val s = shape.shape match {
-      case StepperShape.IntShape    => new IntNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Int]])
-      case StepperShape.LongShape   => new LongNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Long]])
-      case StepperShape.DoubleShape => new DoubleNVectorStepper(new NVectorIterator(this).asInstanceOf[NVectorIterator[Double]])
-      case _                        => shape.parUnbox(new AnyNVectorStepper[A](new NVectorIterator(this)))
+      case StepperShape.IntShape    => new IntNVectorStepper(iterator.asInstanceOf[NVectorIterator[Int]])
+      case StepperShape.LongShape   => new LongNVectorStepper(iterator.asInstanceOf[NVectorIterator[Long]])
+      case StepperShape.DoubleShape => new DoubleNVectorStepper(iterator.asInstanceOf[NVectorIterator[Double]])
+      case _                        => shape.parUnbox(new AnyNVectorStepper[A](iterator.asInstanceOf[NVectorIterator[A]]))
     }
     s.asInstanceOf[S with EfficientSplit]
   }
@@ -188,7 +186,7 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
 
 
 /** Empty vector */
-private final object NVector0 extends NVector[Nothing](null) {
+private final object NVector0 extends NVector[Nothing](NVectorStatics.empty1) {
   import NVectorStatics._
 
   def length = 0
@@ -200,7 +198,7 @@ private final object NVector0 extends NVector[Nothing](null) {
 
   override def prepended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
 
-  override def iterator: Iterator[Nothing] = Iterator.empty
+  override val iterator: Iterator[Nothing] = new NVectorIterator(this, 0, 0)
 
   override def map[B](f: Nothing => B): NVector[B] = this
 
@@ -261,7 +259,8 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
     else new NVector2(wrap1(elem), 1, empty2, prefix1, length+1)
   }
 
-  override def iterator: Iterator[A] = new ArrayOps.ArrayIterator(prefix1).asInstanceOf[Iterator[A]]
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, 1)
+  //override def iterator: Iterator[A] = new ArrayOps.ArrayIterator(prefix1).asInstanceOf[Iterator[A]]
 
   override def map[B](f: A => B): NVector[B] = new NVector1(mapElems1(prefix1, f))
 
@@ -341,6 +340,8 @@ private final class NVector2[+A](_prefix1: Arr1, len1: Int,
     else if(data2.length < WIDTH-2) copy(wrap1(elem), 1, copyPrepend(prefix1, data2), length = length+1)
     else new NVector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length+1)
   }
+
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, vectorSliceCount)
 
   override def map[B](f: A => B): NVector[B] =
     copy(prefix1 = mapElems1(prefix1, f), data2 = mapElems(2, data2, f), suffix1 = mapElems1(suffix1, f))
@@ -445,6 +446,8 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
     else if(data3.length < WIDTH-2) copy(prefix1 = wrap1(elem), len1 = 1, prefix2 = empty2, len12 = 1, data3 = copyPrepend(copyPrepend(prefix1, prefix2), data3), length = length+1)
     else new NVector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length+1)
   }
+
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, vectorSliceCount)
 
   override def map[B](f: A => B): NVector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f),
@@ -571,6 +574,8 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
     else if(data4.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), data4), length = length+1)
     else new NVector5(wrap1(elem), 1, empty2, 1, empty3, 1, wrap4(copyPrepend(copyPrepend(prefix1, prefix2), prefix3)), len123+1, empty5, data4, suffix3, suffix2, suffix1, length+1)
   }
+
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, vectorSliceCount)
 
   override def map[B](f: A => B): NVector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f),
@@ -717,6 +722,8 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
     else if(data5.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), data5), length = length+1)
     else new NVector6(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, wrap5(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4)), len1234+1, empty6, data5, suffix4, suffix3, suffix2, suffix1, length+1)
   }
+
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, vectorSliceCount)
 
   override def map[B](f: A => B): NVector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f), prefix4 = mapElems(4, prefix4, f),
@@ -883,6 +890,8 @@ private final class NVector6[+A](_prefix1: Arr1, len1: Int,
     else if(data6.length < LASTWIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, empty5, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), prefix5), data6), length = length+1)
     else throw new IllegalArgumentException
   }
+
+  override def iterator: Iterator[A] = new NVectorIterator(this, length, vectorSliceCount)
 
   override def map[B](f: A => B): NVector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f), prefix4 = mapElems(4, prefix4, f), prefix5 = mapElems(5, prefix5, f),
@@ -1756,63 +1765,122 @@ private[immutable] object NVectorStatics {
 }
 
 
-private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterator[A] with java.lang.Cloneable {
+private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] var totalLength: Int, private[this] val sliceCount: Int) extends Iterator[A] with java.lang.Cloneable {
   import NVectorStatics._
 
-  private[this] var totalLength = v.length
-
-  private[this] var slice: Array[_ <: AnyRef] = _
-  private[this] var sliceIdx, sliceDim = -1
-  private[this] var sliceStart, sliceEnd = 0 // absolute positions
-
-  private[this] var a1: Arr1 = _
-  private[this] var a1len = 0
+  private[this] var a1: Arr1 = v.prefix1
+  private[this] var a2: Arr2 = _
+  private[this] var a3: Arr3 = _
+  private[this] var a4: Arr4 = _
+  private[this] var a5: Arr5 = _
+  private[this] var a6: Arr6 = _
+  private[this] var a1len = a1.length
   private[this] var i1 = 0 // current index in a1
+  private[this] var oldPos = 0
   private[this] var len1 = totalLength // remaining length relative to a1
 
-  advanceA1()
+  private[this] var sliceIdx = 0
+  private[this] var sliceDim = 1
+  private[this] var sliceStart = 0 // absolute position
+  private[this] var sliceEnd = a1len // absolute position
+
+  //override def toString: String =
+  //  s"NVectorIterator(v=$v, totalLength=$totalLength, sliceCount=$sliceCount): a1len=$a1len, len1=$len1, i1=$i1, sliceEnd=$sliceEnd"
 
   @inline override def knownSize = len1 - i1
 
   @inline def hasNext: Boolean = len1 > i1
 
+  def next(): A = {
+    if(i1 == a1len) advance()
+    val r = a1(i1)
+    i1 += 1
+    r.asInstanceOf[A]
+  }
+
   private[this] def advanceSlice(): Unit = {
     if(!hasNext) Iterator.empty.next()
-    slice = null
-    while((slice eq null) || slice.length == 0) {
+    sliceIdx += 1
+    var slice: Array[_ <: AnyRef] = v.vectorSlice(sliceIdx)
+    while(slice.length == 0) {
       sliceIdx += 1
       slice = v.vectorSlice(sliceIdx)
     }
     sliceStart = sliceEnd
-    sliceDim = vectorSliceDim(v.vectorSliceCount, sliceIdx)
+    sliceDim = vectorSliceDim(sliceCount, sliceIdx)
+    (sliceDim: @switch) match {
+      case 1 => a1 = slice.asInstanceOf[Arr1]
+      case 2 => a2 = slice.asInstanceOf[Arr2]
+      case 3 => a3 = slice.asInstanceOf[Arr3]
+      case 4 => a4 = slice.asInstanceOf[Arr4]
+      case 5 => a5 = slice.asInstanceOf[Arr5]
+      case 6 => a6 = slice.asInstanceOf[Arr6]
+    }
     sliceEnd = sliceStart + slice.length * (1 << (BITS*(sliceDim-1)))
+    if(sliceEnd > totalLength) sliceEnd = totalLength
+    if(sliceDim > 1) oldPos = (1 << (BITS*sliceDim))-1
   }
 
-  private[this] def advanceA1(): Unit = {
+  private[this] def advance(): Unit = {
     val pos = i1-len1+totalLength
     if(pos == sliceEnd) advanceSlice()
-    setA1(pos - sliceStart)
+    if(sliceDim > 1) {
+      val io = pos - sliceStart
+      val xor = oldPos ^ io
+      advanceA(io, xor)
+      oldPos = io
+    }
     len1 -= i1
+    a1len = mmin(a1.length, len1)
     i1 = 0
   }
 
-  private[this] def setA1(io: Int): Unit = {
-    a1 = (sliceDim: @switch) match {
-      case 1 => slice.asInstanceOf[Arr1]
-      case 2 => slice.asInstanceOf[Arr2](io >>> BITS)
-      case 3 => slice.asInstanceOf[Arr3](io >>> BITS2)((io >>> BITS) & MASK)
-      case 4 => slice.asInstanceOf[Arr4](io >>> BITS3)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
-      case 5 => slice.asInstanceOf[Arr5](io >>> BITS4)((io >>> BITS3) & MASK)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
-      case 6 => slice.asInstanceOf[Arr6](io >>> BITS5)((io >>> BITS4) & MASK)((io >>> BITS3) & MASK)((io >>> BITS2) & MASK)((io >>> BITS) & MASK)
+  private[this] def advanceA(io: Int, xor: Int): Unit = {
+    if(xor < WIDTH2) {
+      a1 = a2((io >>> BITS) & MASK)
+    } else if(xor < WIDTH3) {
+      a2 = a3((io >>> BITS2) & MASK)
+      a1 = a2(0)
+    } else if(xor < WIDTH4) {
+      a3 = a4((io >>> BITS3) & MASK)
+      a2 = a3(0)
+      a1 = a2(0)
+    } else if(xor < WIDTH5) {
+      a4 = a5((io >>> BITS4) & MASK)
+      a3 = a4(0)
+      a2 = a3(0)
+      a1 = a2(0)
+    } else {
+      a5 = a6(io >>> BITS5)
+      a4 = a5(0)
+      a3 = a4(0)
+      a2 = a3(0)
+      a1 = a2(0)
     }
-    a1len = a1.length
   }
 
-  def next(): A = {
-    if(i1 == a1len) advanceA1()
-    val r = a1(i1)
-    i1 += 1
-    r.asInstanceOf[A]
+  private[this] def setA(io: Int, xor: Int): Unit = {
+    if(xor < WIDTH2) {
+      a1 = a2((io >>> BITS) & MASK)
+    } else if(xor < WIDTH3) {
+      a2 = a3((io >>> BITS2) & MASK)
+      a1 = a2((io >>> BITS) & MASK)
+    } else if(xor < WIDTH4) {
+      a3 = a4((io >>> BITS3) & MASK)
+      a2 = a3((io >>> BITS2) & MASK)
+      a1 = a2((io >>> BITS) & MASK)
+    } else if(xor < WIDTH5) {
+      a4 = a5((io >>> BITS4) & MASK)
+      a3 = a4((io >>> BITS3) & MASK)
+      a2 = a3((io >>> BITS2) & MASK)
+      a1 = a2((io >>> BITS) & MASK)
+    } else {
+      a5 = a6(io >>> BITS5)
+      a4 = a5((io >>> BITS4) & MASK)
+      a3 = a4((io >>> BITS3) & MASK)
+      a2 = a3((io >>> BITS2) & MASK)
+      a1 = a2((io >>> BITS) & MASK)
+    }
   }
 
   override def drop(n: Int): Iterator[A] = {
@@ -1822,12 +1890,19 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
       if(newpos == totalLength) {
         i1 = 0
         len1 = 0
+        a1len = 0
       } else {
         while(newpos >= sliceEnd) advanceSlice()
         val io = newpos - sliceStart
-        setA1(io)
+        if(sliceDim > 1) {
+          val xor = oldPos ^ io
+          setA(io, xor)
+          oldPos = io
+        }
+        a1len = a1.length
         i1 = io & MASK
         len1 = i1 + (totalLength-newpos)
+        if(a1len > len1) a1len = len1
       }
     }
     this
@@ -1859,7 +1934,7 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
     var copied = 0
     val isBoxed = xs.isInstanceOf[Array[AnyRef]]
     while(copied < total) {
-      if(i1 == a1len) advanceA1()
+      if(i1 == a1len) advance()
       val count = mmin(total-copied, a1.length-i1)
       if(isBoxed) System.arraycopy(a1, i1, xs, start+copied, count)
       else Array.copy(a1, i1, xs, start+copied, count)
