@@ -146,11 +146,6 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
   protected[immutable] def vectorSliceCount: Int
   /** Slice at index */
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef]
-  /** Dimension of the slice at index */
-  protected[immutable] final def vectorSliceDim(idx: Int): Int = {
-    val c = vectorSliceCount/2
-    c+1-abs(idx-c)
-  }
   /** Length of all slices up to and including index */
   protected[immutable] def vectorSlicePrefixLength(idx: Int): Int
 
@@ -179,6 +174,15 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
   override final def head: A =
     try prefix1(0).asInstanceOf[A]
     catch { case _: NullPointerException => throw ioob(0) }
+
+  override final def foreach[U](f: A => U): Unit = {
+    val c = vectorSliceCount
+      var i = 0
+      while(i < c) {
+        foreachRec(vectorSliceDim(c, i)-1, vectorSlice(i), f)
+        i += 1
+      }
+  }
 }
 
 
@@ -196,8 +200,6 @@ private final object NVector0 extends NVector[Nothing](null) {
   override def prepended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
 
   override def iterator: Iterator[Nothing] = Iterator.empty
-
-  override def foreach[U](f: Nothing => U): Unit = ()
 
   override def map[B](f: Nothing => B): NVector[B] = this
 
@@ -259,8 +261,6 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
   }
 
   override def iterator: Iterator[A] = new ArrayOps.ArrayIterator(prefix1).asInstanceOf[Iterator[A]]
-
-  override def foreach[U](f: A => U): Unit = foreachElem(prefix1, f)
 
   override def map[B](f: A => B): NVector[B] = new NVector1(mapElems1(prefix1, f))
 
@@ -339,12 +339,6 @@ private final class NVector2[+A](_prefix1: Arr1, len1: Int,
     if     (len1         < WIDTH  ) copy(copyPrepend1(elem, prefix1), len1+1, length = length+1)
     else if(data2.length < WIDTH-2) copy(wrap1(elem), 1, copyPrepend(prefix1, data2), length = length+1)
     else new NVector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length+1)
-  }
-
-  override def foreach[U](f: A => U): Unit = {
-    foreachElem(prefix1, f)
-    foreachElem(data2, f)
-    foreachElem(suffix1, f)
   }
 
   override def map[B](f: A => B): NVector[B] =
@@ -449,14 +443,6 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
     else if(len12        < WIDTH2 ) copy(prefix1 = wrap1(elem), len1 = 1, prefix2 = copyPrepend(prefix1, prefix2), len12 = len12+1, length = length+1)
     else if(data3.length < WIDTH-2) copy(prefix1 = wrap1(elem), len1 = 1, prefix2 = empty2, len12 = 1, data3 = copyPrepend(copyPrepend(prefix1, prefix2), data3), length = length+1)
     else new NVector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length+1)
-  }
-
-  override def foreach[U](f: A => U): Unit = {
-    foreachElem(prefix1, f)
-    foreachElem(prefix2, f)
-    foreachElem(data3, f)
-    foreachElem(suffix2, f)
-    foreachElem(suffix1, f)
   }
 
   override def map[B](f: A => B): NVector[B] =
@@ -583,16 +569,6 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
     else if(len123       < WIDTH3 ) copy(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, length = length+1)
     else if(data4.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), data4), length = length+1)
     else new NVector5(wrap1(elem), 1, empty2, 1, empty3, 1, wrap4(copyPrepend(copyPrepend(prefix1, prefix2), prefix3)), len123+1, empty5, data4, suffix3, suffix2, suffix1, length+1)
-  }
-
-  override def foreach[U](f: A => U): Unit = {
-    foreachElem(prefix1, f)
-    foreachElem(prefix2, f)
-    foreachElem(prefix3, f)
-    foreachElem(data4, f)
-    foreachElem(suffix3, f)
-    foreachElem(suffix2, f)
-    foreachElem(suffix1, f)
   }
 
   override def map[B](f: A => B): NVector[B] =
@@ -739,18 +715,6 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
     else if(len1234      < WIDTH4 ) copy(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), len1234+1, length = length+1)
     else if(data5.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), data5), length = length+1)
     else new NVector6(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, wrap5(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4)), len1234+1, empty6, data5, suffix4, suffix3, suffix2, suffix1, length+1)
-  }
-
-  override def foreach[U](f: A => U): Unit = {
-    foreachElem(prefix1, f)
-    foreachElem(prefix2, f)
-    foreachElem(prefix3, f)
-    foreachElem(prefix4, f)
-    foreachElem(data5, f)
-    foreachElem(suffix4, f)
-    foreachElem(suffix3, f)
-    foreachElem(suffix2, f)
-    foreachElem(suffix1, f)
   }
 
   override def map[B](f: A => B): NVector[B] =
@@ -917,20 +881,6 @@ private final class NVector6[+A](_prefix1: Arr1, len1: Int,
     else if(len12345     < WIDTH5     ) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), prefix5), len12345+1, length = length+1)
     else if(data6.length < LASTWIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, empty5, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), prefix5), data6), length = length+1)
     else throw new IllegalArgumentException
-  }
-
-  override def foreach[U](f: A => U): Unit = {
-    foreachElem(prefix1, f)
-    foreachElem(prefix2, f)
-    foreachElem(prefix3, f)
-    foreachElem(prefix4, f)
-    foreachElem(prefix5, f)
-    foreachElem(data6, f)
-    foreachElem(suffix5, f)
-    foreachElem(suffix4, f)
-    foreachElem(suffix3, f)
-    foreachElem(suffix2, f)
-    foreachElem(suffix1, f)
   }
 
   override def map[B](f: A => B): NVector[B] =
@@ -1432,7 +1382,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     var sliceIdx = 0
     while(sliceIdx < sliceCount) {
       val slice = xs.vectorSlice(sliceIdx)
-      xs.vectorSliceDim(sliceIdx) match {
+      vectorSliceDim(sliceCount, sliceIdx) match {
         case 1 => addArr1(slice.asInstanceOf[Arr1])
         case n => foreachRec(n-2, slice, addArr1)
       }
@@ -1623,6 +1573,12 @@ private[immutable] object NVectorStatics {
   type Arr5 = Array[Array[Array[Array[Array[AnyRef]]]]]
   type Arr6 = Array[Array[Array[Array[Array[Array[AnyRef]]]]]]
 
+  /** Dimension of the slice at index */
+  @inline def vectorSliceDim(count: Int, idx: Int): Int = {
+    val c = count/2
+    c+1-abs(idx-c)
+  }
+
   @inline def copyOrUse[T <: AnyRef](a: Array[T], start: Int, end: Int): Array[T] =
     if(start == 0 && end == a.length) a else copyOfRange[T](a, start, end)
 
@@ -1746,54 +1702,6 @@ private[immutable] object NVectorStatics {
     }
   }
 
-  @inline final def foreachElem[A, U](a1: Arr1, f: A => U): Unit = {
-    var i1 = 0
-    while(i1 < a1.length) {
-      f(a1(i1).asInstanceOf[A])
-      i1 += 1
-    }
-  }
-
-  final def foreachElem[A, U](a2: Arr2, f: A => U): Unit = {
-    var i2 = 0
-    while(i2 < a2.length) {
-      foreachElem(a2(i2), f)
-      i2 += 1
-    }
-  }
-
-  final def foreachElem[A, U](a3: Arr3, f: A => U): Unit = {
-    var i3 = 0
-    while(i3 < a3.length) {
-      foreachElem(a3(i3), f)
-      i3 += 1
-    }
-  }
-
-  final def foreachElem[A, U](a4: Arr4, f: A => U): Unit = {
-    var i4 = 0
-    while(i4 < a4.length) {
-      foreachElem(a4(i4), f)
-      i4 += 1
-    }
-  }
-
-  final def foreachElem[A, U](a5: Arr5, f: A => U): Unit = {
-    var i5 = 0
-    while(i5 < a5.length) {
-      foreachElem(a5(i5), f)
-      i5 += 1
-    }
-  }
-
-  final def foreachElem[A, U](a6: Arr6, f: A => U): Unit = {
-    var i6 = 0
-    while(i6 < a6.length) {
-      foreachElem(a6(i6), f)
-      i6 += 1
-    }
-  }
-
   final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
     var i = 0
     while(i < a.length) {
@@ -1876,7 +1784,7 @@ private[immutable] final class NVectorIterator[A](v: NVector[A]) extends Iterato
       slice = v.vectorSlice(sliceIdx)
     }
     sliceStart = sliceEnd
-    sliceDim = v.vectorSliceDim(sliceIdx)
+    sliceDim = vectorSliceDim(v.vectorSliceCount, sliceIdx)
     sliceEnd = sliceStart + slice.length * (1 << (BITS*(sliceDim-1)))
   }
 

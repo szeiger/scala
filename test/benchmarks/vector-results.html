@@ -56,6 +56,7 @@
       if(benchmarkData.MapNew) drawChart(new ChartData("Map to new value", benchmarkData.MapNew));
       if(benchmarkData.Prepend) drawChart(new ChartData("Prepend individual elements of same total size", benchmarkData.Prepend));
       if(benchmarkData.Tail) drawChart(new ChartData("Tail (1000 times)", benchmarkData.Tail));
+      if(benchmarkData.Slice) drawChart(new ChartData("Slice at various points", benchmarkData.Slice));
       if(benchmarkData.UpdateRandom) drawChart(new ChartData("Update with random index 100 times", benchmarkData.UpdateRandom));
       if(benchmarkData.UpdateSequential) drawChart(new ChartData("Update sequentially 1000 times", benchmarkData.UpdateSequential));
     }
