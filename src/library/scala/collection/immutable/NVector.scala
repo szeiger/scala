@@ -131,6 +131,7 @@ sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
   override def tail: NVector[A] = slice(1, length)
   override def init: NVector[A] = slice(0, length-1)
 
+  /** Like slice but parameters must be 0 <= lo < hi < length */
   protected[this] def slice0(lo: Int, hi: Int): NVector[A]
 
   override final def slice(from: Int, until: Int): NVector[A] = {
@@ -971,7 +972,10 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     val count = a.length * (1 << (BITS*(n-1)))
     val lo0 = mmax(lo-pos, 0)
     val hi0 = mmin(hi-pos, count)
-    if(hi0 > lo0) addSlice(n, a, lo0, hi0)
+    if(hi0 > lo0) {
+      addSlice(n, a, lo0, hi0)
+      len += (hi0 - lo0)
+    }
     pos += count
   }
 
@@ -981,14 +985,11 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       add(1, copyOrUse(a, lo, hi))
     } else {
       val bitsN = BITS * (n-1)
+      val widthN = 1 << bitsN
       var loN = lo >>> bitsN
       var hiN = hi >>> bitsN
-      /*if(n != 6) {
-        loN &= MASK
-        hiN &= MASK
-      }*/
-      val loRest = lo & ((1 << bitsN) - 1)
-      val hiRest = hi & ((1 << bitsN) - 1)
+      val loRest = lo & (widthN - 1)
+      val hiRest = hi & (widthN - 1)
       //println(s"*****       bitsN=$bitsN, loN=$loN, hiN=$hiN, loRest=$loRest, hiRest=$hiRest")
       if(loRest == 0) {
         if(hiRest == 0) {
@@ -1001,7 +1002,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
         if(hiN == loN) {
           addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, hiRest)
         } else {
-          addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, 1 << bitsN)
+          addSlice(n-1, a(loN).asInstanceOf[Array[AnyRef]], loRest, widthN)
           if(hiRest == 0) {
             if(hiN > loN+1) add(n, copyOrUse(a, loN+1, hiN))
           } else {
@@ -1018,7 +1019,6 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       if(n <= maxDim) suffixIdx(n)
       else { maxDim = n; prefixIdx(n) }
     slices(idx) = a.asInstanceOf[Array[AnyRef]]
-    len += (a.length * (1 << (BITS*(n-1))))
   }
 
   def result[A](): NVector[A] = {
