@@ -92,7 +92,7 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * In addition to the data slices (`prefix1`, `prefix2`, ..., `dataN`, ..., `suffix2`, `suffix1`) we store a running
   * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
-sealed abstract class NVector[+A](protected[this] final val prefix1: Arr1)
+sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
   extends AbstractSeq[A]
     with IndexedSeq[A]
     with IndexedSeqOps[A, NVector, NVector[A]]
@@ -293,9 +293,9 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
 
 
 /** 2-dimensional radix-balanced finger tree */
-private final class NVector2[+A](_prefix1: Arr1, len1: Int,
-                                 data2: Arr2,
-                                 suffix1: Arr1,
+private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+                                 private[immutable] final val data2: Arr2,
+                                 private[immutable] final val suffix1: Arr1,
                                  val length: Int) extends NVector[A](_prefix1) {
   import NVectorStatics._
 
@@ -385,10 +385,10 @@ private final class NVector2[+A](_prefix1: Arr1, len1: Int,
 
 
 /** 3-dimensional radix-balanced finger tree */
-private final class NVector3[+A](_prefix1: Arr1, len1: Int,
-                                 prefix2: Arr2, len12: Int,
-                                 data3: Arr3,
-                                 suffix2: Arr2, suffix1: Arr1,
+private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+                                 private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
+                                 private[immutable] final val data3: Arr3,
+                                 private[immutable] final val suffix2: Arr2, private[immutable] final val suffix1: Arr1,
                                  val length: Int) extends NVector[A](_prefix1) {
   import NVectorStatics._
 
@@ -499,11 +499,11 @@ private final class NVector3[+A](_prefix1: Arr1, len1: Int,
 
 
 /** 4-dimensional radix-balanced finger tree */
-private final class NVector4[+A](_prefix1: Arr1, len1: Int,
-                                 prefix2: Arr2, len12: Int,
-                                 prefix3: Arr3, len123: Int,
-                                 data4: Arr4,
-                                 suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
+private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+                                 private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
+                                 private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
+                                 private[immutable] final val data4: Arr4,
+                                 private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, private[immutable] final val suffix1: Arr1,
                                  val length: Int) extends NVector[A](_prefix1) {
   import NVectorStatics._
 
@@ -633,12 +633,12 @@ private final class NVector4[+A](_prefix1: Arr1, len1: Int,
 
 
 /** 5-dimensional radix-balanced finger tree */
-private final class NVector5[+A](_prefix1: Arr1, len1: Int,
-                                 prefix2: Arr2, len12: Int,
-                                 prefix3: Arr3, len123: Int,
-                                 prefix4: Arr4, len1234: Int,
-                                 data5: Arr5,
-                                 suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
+private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+                                 private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
+                                 private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
+                                 private[immutable] final val prefix4: Arr4, private[immutable] final val len1234: Int,
+                                 private[immutable] final val data5: Arr5,
+                                 private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, private[immutable] final val suffix1: Arr1,
                                  val length: Int) extends NVector[A](_prefix1) {
   import NVectorStatics._
 
@@ -787,13 +787,13 @@ private final class NVector5[+A](_prefix1: Arr1, len1: Int,
 
 
 /** 6-dimensional radix-balanced finger tree */
-private final class NVector6[+A](_prefix1: Arr1, len1: Int,
-                                 prefix2: Arr2, len12: Int,
-                                 prefix3: Arr3, len123: Int,
-                                 prefix4: Arr4, len1234: Int,
-                                 prefix5: Arr5, len12345: Int,
-                                 data6: Arr6,
-                                 suffix5: Arr5, suffix4: Arr4, suffix3: Arr3, suffix2: Arr2, suffix1: Arr1,
+private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+                                 private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
+                                 private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
+                                 private[immutable] final val prefix4: Arr4, private[immutable] final val len1234: Int,
+                                 private[immutable] final val prefix5: Arr5, private[immutable] final val len12345: Int,
+                                 private[immutable] final val data6: Arr6,
+                                 private[immutable] final val suffix5: Arr5, private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, private[immutable] final val suffix1: Arr1,
                                  val length: Int) extends NVector[A](_prefix1) {
   import NVectorStatics._
 
@@ -1256,48 +1256,46 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     (v.vectorSliceCount: @switch) match {
       case 0 =>
       case 1 =>
+        val v1 = v.asInstanceOf[NVector1[_]]
         depth = 1
-        setLen(v.length)
-        a1 = copyOrUse(v.vectorSlice(0).asInstanceOf[Arr1], 0, WIDTH)
+        setLen(v1.length)
+        a1 = copyOrUse(v1.prefix1, 0, WIDTH)
       case 3 =>
-        val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
-        val d2 = v.vectorSlice(1).asInstanceOf[Arr2]
-        a1 = copyOrUse(v.vectorSlice(2).asInstanceOf[Arr1], 0, WIDTH)
+        val v2 = v.asInstanceOf[NVector2[_]]
+        val d2 = v2.data2
+        a1 = copyOrUse(v2.suffix1, 0, WIDTH)
         depth = 2
-        offset = WIDTH - p1.length
-        setLen(v.length + offset)
+        offset = WIDTH - v2.len1
+        setLen(v2.length + offset)
         a2 = new Arr2(WIDTH)
-        a2(0) = p1
+        a2(0) = v2.prefix1
         System.arraycopy(d2, 0, a2, 1, d2.length)
         a2(d2.length+1) = a1
       case 5 =>
-        val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
-        val p2 = v.vectorSlice(1).asInstanceOf[Arr2]
-        val d3 = v.vectorSlice(2).asInstanceOf[Arr3]
-        val s2 = v.vectorSlice(3).asInstanceOf[Arr2]
-        a1 = copyOrUse(v.vectorSlice(4).asInstanceOf[Arr1], 0, WIDTH)
+        val v3 = v.asInstanceOf[NVector3[_]]
+        val d3 = v3.data3
+        val s2 = v3.suffix2
+        a1 = copyOrUse(v3.suffix1, 0, WIDTH)
         depth = 3
-        offset = WIDTH2 - p1.length - WIDTH*p2.length
-        setLen(v.length + offset)
+        offset = WIDTH2 - v3.len12
+        setLen(v3.length + offset)
         a3 = new Arr3(WIDTH)
-        a3(0) = copyPrepend(p1, p2)
+        a3(0) = copyPrepend(v3.prefix1, v3.prefix2)
         System.arraycopy(d3, 0, a3, 1, d3.length)
         a2 = copyOf(s2, WIDTH)
         a3(d3.length+1) = a2
         a2(s2.length) = a1
       case 7 =>
-        val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
-        val p2 = v.vectorSlice(1).asInstanceOf[Arr2]
-        val p3 = v.vectorSlice(2).asInstanceOf[Arr3]
-        val d4 = v.vectorSlice(3).asInstanceOf[Arr4]
-        val s3 = v.vectorSlice(4).asInstanceOf[Arr3]
-        val s2 = v.vectorSlice(5).asInstanceOf[Arr2]
-        a1 = copyOrUse(v.vectorSlice(6).asInstanceOf[Arr1], 0, WIDTH)
+        val v4 = v.asInstanceOf[NVector4[_]]
+        val d4 = v4.data4
+        val s3 = v4.suffix3
+        val s2 = v4.suffix2
+        a1 = copyOrUse(v4.suffix1, 0, WIDTH)
         depth = 4
-        offset = WIDTH3 - p1.length - WIDTH*p2.length - WIDTH2*p3.length
-        setLen(v.length + offset)
+        offset = WIDTH3 - v4.len123
+        setLen(v4.length + offset)
         a4 = new Arr4(WIDTH)
-        a4(0) = copyPrepend(copyPrepend(p1, p2), p3)
+        a4(0) = copyPrepend(copyPrepend(v4.prefix1, v4.prefix2), v4.prefix3)
         System.arraycopy(d4, 0, a4, 1, d4.length)
         a3 = copyOf(s3, WIDTH)
         a2 = copyOf(s2, WIDTH)
@@ -1305,20 +1303,17 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a3(s3.length) = a2
         a2(s2.length) = a1
       case 9 =>
-        val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
-        val p2 = v.vectorSlice(1).asInstanceOf[Arr2]
-        val p3 = v.vectorSlice(2).asInstanceOf[Arr3]
-        val p4 = v.vectorSlice(3).asInstanceOf[Arr4]
-        val d5 = v.vectorSlice(4).asInstanceOf[Arr5]
-        val s4 = v.vectorSlice(5).asInstanceOf[Arr4]
-        val s3 = v.vectorSlice(6).asInstanceOf[Arr3]
-        val s2 = v.vectorSlice(7).asInstanceOf[Arr2]
-        a1 = copyOrUse(v.vectorSlice(8).asInstanceOf[Arr1], 0, WIDTH)
+        val v5 = v.asInstanceOf[NVector5[_]]
+        val d5 = v5.data5
+        val s4 = v5.suffix4
+        val s3 = v5.suffix3
+        val s2 = v5.suffix2
+        a1 = copyOrUse(v5.suffix1, 0, WIDTH)
         depth = 5
-        offset = WIDTH4 - p1.length - WIDTH*p2.length - WIDTH2*p3.length - WIDTH3*p4.length
-        setLen(v.length + offset)
+        offset = WIDTH4 - v5.len1234
+        setLen(v5.length + offset)
         a5 = new Arr5(WIDTH)
-        a5(0) = copyPrepend(copyPrepend(copyPrepend(p1, p2), p3), p4)
+        a5(0) = copyPrepend(copyPrepend(copyPrepend(v5.prefix1, v5.prefix2), v5.prefix3), v5.prefix4)
         System.arraycopy(d5, 0, a5, 1, d5.length)
         a4 = copyOf(s4, WIDTH)
         a3 = copyOf(s3, WIDTH)
@@ -1328,22 +1323,18 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a3(s3.length) = a2
         a2(s2.length) = a1
       case 11 =>
-        val p1 = v.vectorSlice(0).asInstanceOf[Arr1]
-        val p2 = v.vectorSlice(1).asInstanceOf[Arr2]
-        val p3 = v.vectorSlice(2).asInstanceOf[Arr3]
-        val p4 = v.vectorSlice(3).asInstanceOf[Arr4]
-        val p5 = v.vectorSlice(4).asInstanceOf[Arr5]
-        val d6 = v.vectorSlice(5).asInstanceOf[Arr6]
-        val s5 = v.vectorSlice(6).asInstanceOf[Arr5]
-        val s4 = v.vectorSlice(7).asInstanceOf[Arr4]
-        val s3 = v.vectorSlice(8).asInstanceOf[Arr3]
-        val s2 = v.vectorSlice(9).asInstanceOf[Arr2]
-        a1 = copyOrUse(v.vectorSlice(10).asInstanceOf[Arr1], 0, WIDTH)
+        val v6 = v.asInstanceOf[NVector6[_]]
+        val d6 = v6.data6
+        val s5 = v6.suffix5
+        val s4 = v6.suffix4
+        val s3 = v6.suffix3
+        val s2 = v6.suffix2
+        a1 = copyOrUse(v6.suffix1, 0, WIDTH)
         depth = 6
-        offset = WIDTH5 - p1.length - WIDTH*p2.length - WIDTH2*p3.length - WIDTH3*p4.length - WIDTH4*p5.length
-        setLen(v.length + offset)
+        offset = WIDTH5 - v6.len12345
+        setLen(v6.length + offset)
         a6 = new Arr6(WIDTH)
-        a6(0) = copyPrepend(copyPrepend(copyPrepend(copyPrepend(p1, p2), p3), p4), p5)
+        a6(0) = copyPrepend(copyPrepend(copyPrepend(copyPrepend(v6.prefix1, v6.prefix2), v6.prefix3), v6.prefix4), v6.prefix5)
         System.arraycopy(d6, 0, a6, 1, d6.length)
         a5 = copyOf(s5, WIDTH)
         a4 = copyOf(s4, WIDTH)
