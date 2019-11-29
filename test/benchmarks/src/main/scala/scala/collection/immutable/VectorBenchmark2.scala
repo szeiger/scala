@@ -49,6 +49,15 @@ class VectorBenchmark2 {
   // Vector
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
+  @Benchmark def vBadApplySequential(bh: Blackhole): Any = {
+    val coll = v
+    var i = 0
+    while(i < coll.length) {
+      bh.consume(v(i))
+      i += 1
+    }
+  }
+
   @Benchmark def vApplySequential(bh: Blackhole): Any = {
     var i = 0
     while(i < 1000000) {
@@ -338,6 +347,15 @@ class VectorBenchmark2 {
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
   // NVector
   /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+  @Benchmark def nvBadApplySequential(bh: Blackhole): Any = {
+    val coll = nv
+    var i = 0
+    while(i < coll.length) {
+      bh.consume(v(i))
+      i += 1
+    }
+  }
 
   @Benchmark def nvApplySequential(bh: Blackhole): Any = {
     var i = 0
