@@ -421,7 +421,7 @@ class NVectorTest {
 }
 
 object NVectorUtils {
-  import NVectorStatics._
+  import NVectorInline._
 
   def validateDebug(v: NVector[_]): Unit = {
     try validate(v) catch {

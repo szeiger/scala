@@ -21,12 +21,17 @@ import java.util.{Arrays, Spliterator}
 import java.util.Arrays.{copyOf, copyOfRange}
 import java.lang.Math.{abs, max => mmax, min => mmin}
 
-import NVectorStatics.{Arr1, Arr2, Arr3, Arr4, Arr5, Arr6}
+import NVectorInline._
+import NVectorStatics._
 import scala.collection.Stepper.EfficientSplit
 
 
+/** $factoryInfo
+  * @define Coll `NVector`
+  * @define coll vector
+  */
+@SerialVersionUID(3L)
 object NVector extends StrictOptimizedSeqFactory[NVector] {
-  import NVectorStatics._
 
   def empty[A]: NVector[A] = NVector0
 
@@ -101,7 +106,6 @@ sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
     with StrictOptimizedSeqOps[A, NVector, NVector[A]]
     with IterableFactoryDefaults[A, NVector]
     with DefaultSerializable {
-  import NVectorStatics._
 
   override def iterableFactory: SeqFactory[NVector] = NVector
 
@@ -199,15 +203,90 @@ sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
         i += 1
       }
   }
+
+  // Helper methods used by subclasses:
+
+  protected[this] final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
+    var i = 0
+    while(i < a.length) {
+      val v1 = a(i).asInstanceOf[AnyRef]
+      val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
+      if(v1 ne v2)
+        return mapElems1Rest(a, f, i, v2)
+      i += 1
+    }
+    a
+  }
+
+  private[this] final def mapElems1Rest[A, B](a: Arr1, f: A => B, at: Int, v2: AnyRef): Arr1 = {
+    var ac = new Arr1(a.length)
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
+    while(i < a.length) {
+      ac(i) = f(a(i).asInstanceOf[A]).asInstanceOf[AnyRef]
+      i += 1
+    }
+    ac
+  }
+
+  protected[this] final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
+    if(n == 1)
+      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
+    else {
+      var i = 0
+      while(i < a.length) {
+        val v1 = a(i)
+        val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
+        if(v1 ne v2)
+          return mapElemsRest(n, a, f, i, v2)
+        i += 1
+      }
+      a
+    }
+  }
+
+  private[this] final def mapElemsRest[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B, at: Int, v2: AnyRef): Array[T] = {
+    var ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
+    while(i < a.length) {
+      ac(i) = mapElems(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
+      i += 1
+    }
+    ac.asInstanceOf[Array[T]]
+  }
+
+  protected[this] final def append1IfSpace(suffix1: Arr1, xs: IterableOnce[_]): Arr1 = xs match {
+    case it: Iterable[_] =>
+      if(it.sizeCompare(WIDTH-suffix1.length) <= 0) {
+        it.size match {
+          case 0 => null
+          case 1 => copyAppend(suffix1, it.head.asInstanceOf[AnyRef])
+          case s =>
+            val suffix1b = copyOf(suffix1, suffix1.length + s)
+            it.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
+            suffix1b
+        }
+      } else null
+    case it =>
+      val s = it.knownSize
+      if(s > 0 && s <= WIDTH-suffix1.length) {
+        val suffix1b = copyOf(suffix1, suffix1.length + s)
+        it.iterator.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
+        suffix1b
+      } else null
+  }
 }
 
 
 /** Vector with suffix and length fields; all NVector subclasses except NVector1 extend this */
 private sealed abstract class BigNVector[+A](_prefix1: Arr1, private[immutable] val suffix1: Arr1, private[immutable] val length0: Int) extends NVector[A](_prefix1)
 
+
 /** Empty vector */
-private final object NVector0 extends BigNVector[Nothing](NVectorStatics.empty1, NVectorStatics.empty1, 0) {
-  import NVectorStatics._
+private final object NVector0 extends BigNVector[Nothing](empty1, empty1, 0) {
 
   def apply(index: Int) = throw ioob(index)
 
@@ -249,7 +328,6 @@ private final object NVector0 extends BigNVector[Nothing](NVectorStatics.empty1,
 
 /** Flat ArraySeq-like structure */
 private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
-  import NVectorStatics._
 
   @inline def apply(index: Int): A =
     try prefix1(index).asInstanceOf[A]
@@ -261,11 +339,8 @@ private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
 
   override def appended[B >: A](elem: B): NVector[B] = {
     val len1 = prefix1.length
-    if(len1 < WIDTH) {
-      val a = copyOf(prefix1, len1+1)
-      a(len1) = elem.asInstanceOf[AnyRef]
-      new NVector1(a)
-    } else new NVector2(prefix1, WIDTH, empty2, wrap1(elem), WIDTH+1)
+    if(len1 < WIDTH) new NVector1(copyAppend1(prefix1, elem))
+    else new NVector2(prefix1, WIDTH, empty2, wrap1(elem), WIDTH+1)
   }
 
   override def prepended[B >: A](elem: B): NVector[B] = {
@@ -307,7 +382,6 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
                                  private[immutable] final val data2: Arr2,
                                  _suffix1: Arr1,
                                  _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
-  import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  data2: Arr2 = data2,
@@ -340,7 +414,7 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def appended[B >: A](elem: B): NVector[B] = {
-    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length0 = length0+1)
+    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(data2.length   < WIDTH-2) copy(data2 = copyAppend(data2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else new NVector3(prefix1, len1, data2, WIDTH*(WIDTH-2) + len1, empty3, wrap2(suffix1), wrap1(elem), length0+1)
   }
@@ -396,7 +470,6 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
                                  private[immutable] final val data3: Arr3,
                                  private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
                                  _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
-  import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -440,7 +513,7 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def appended[B >: A](elem: B): NVector[B] = {
-    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length0 = length0+1)
+    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(data3.length   < WIDTH-2) copy(data3 = copyAppend(data3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else new NVector4(prefix1, len1, prefix2, len12, data3, (WIDTH-2)*WIDTH2 + len12, empty4, wrap3(copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length0+1)
@@ -507,7 +580,6 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
                                  private[immutable] final val data4: Arr4,
                                  private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
                                  _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
-  import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -562,7 +634,7 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def appended[B >: A](elem: B): NVector[B] = {
-    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length0 = length0+1)
+    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(data4.length   < WIDTH-2) copy(data4   = copyAppend(data4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
@@ -638,7 +710,6 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
                                  private[immutable] final val data5: Arr5,
                                  private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
                                  _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
-  import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -704,7 +775,7 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def appended[B >: A](elem: B): NVector[B] = {
-    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length0 = length0+1)
+    if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix4.length < WIDTH-1) copy(suffix4 = copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
@@ -789,7 +860,6 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
                                  private[immutable] final val data6: Arr6,
                                  private[immutable] final val suffix5: Arr5, private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
                                  _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
-  import NVectorStatics._
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -866,7 +936,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
   override def appended[B >: A](elem: B): NVector[B] = {
-    if     (suffix1.length < WIDTH      ) copy(suffix1 = copyAppend(suffix1, elem.asInstanceOf[AnyRef]), length0 = length0+1)
+    if     (suffix1.length < WIDTH      ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1    ) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1    ) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix4.length < WIDTH-1    ) copy(suffix4 = copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
@@ -958,7 +1028,6 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
   */
 private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   //println(s"***** NVectorSliceBuilder($lo, $hi)")
-  import NVectorStatics._
 
   private[this] val slices = new Array[Array[AnyRef]](11)
   private[this] var len, pos, maxDim = 0
@@ -1185,7 +1254,6 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
 
 
 private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
-  import NVectorStatics._
 
   private[this] var a6: Arr6 = _
   private[this] var a5: Arr5 = _
@@ -1539,7 +1607,8 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
 }
 
 
-private[immutable] object NVectorStatics {
+/** Compile-time definitions for NVector. No references to this object should appear in bytecode. */
+private[immutable] object NVectorInline {
   // compile-time numeric constants
   final val BITS = 5
   final val WIDTH = 1 << BITS
@@ -1572,60 +1641,12 @@ private[immutable] object NVectorStatics {
   @inline def copyOrUse[T <: AnyRef](a: Array[T], start: Int, end: Int): Array[T] =
     if(start == 0 && end == a.length) a else copyOfRange[T](a, start, end)
 
-  final def copyAppend[T <: AnyRef](a: Array[T], elem: T): Array[T] = {
-    val ac = copyOf(a, a.length+1)
-    ac(ac.length-1) = elem
-    ac
-  }
-
-  final def copyPrepend1(elem: Any, a: Arr1): Arr1 = {
-    val ac = new Arr1(a.length+1)
-    System.arraycopy(a, 0, ac, 1, a.length)
-    ac(0) = elem.asInstanceOf[AnyRef]
-    ac
-  }
-
-  final def copyPrepend[T <: AnyRef](elem: T, a: Array[T]): Array[T] = {
-    val ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length+1).asInstanceOf[Array[T]]
-    System.arraycopy(a, 0, ac, 1, a.length)
-    ac(0) = elem
-    ac
-  }
-
-  final def append1IfSpace(suffix1: Arr1, xs: IterableOnce[_]): Arr1 = xs match {
-    case it: Iterable[_] =>
-      if(it.sizeCompare(WIDTH-suffix1.length) <= 0) {
-        it.size match {
-          case 0 => null
-          case 1 => copyAppend(suffix1, it.head.asInstanceOf[AnyRef])
-          case s =>
-            val suffix1b = copyOf(suffix1, suffix1.length + s)
-            it.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
-            suffix1b
-        }
-      } else null
-    case it =>
-      val s = it.knownSize
-      if(s > 0 && s <= WIDTH-suffix1.length) {
-        val suffix1b = copyOf(suffix1, suffix1.length + s)
-        it.iterator.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
-        suffix1b
-      } else null
-  }
-
   @inline final def copyTail[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 1, a.length)
 
   @inline final def copyInit[T <: AnyRef](a: Array[T]): Array[T] = copyOfRange[T](a, 0, a.length-1)
 
   @inline final def copyIfDifferentSize[T <: AnyRef](a: Array[T], len: Int): Array[T] =
     if(a.length == len) a else copyOf[T](a, len)
-
-  final val empty1: Arr1 = new Array(0)
-  final val empty2: Arr2 = new Array(0)
-  final val empty3: Arr3 = new Array(0)
-  final val empty4: Arr4 = new Array(0)
-  final val empty5: Arr5 = new Array(0)
-  final val empty6: Arr6 = new Array(0)
 
   @inline final def wrap1(x: Any ): Arr1 = { val a = new Arr1(1); a(0) = x.asInstanceOf[AnyRef]; a }
   @inline final def wrap2(x: Arr1): Arr2 = { val a = new Arr2(1); a(0) = x; a }
@@ -1674,6 +1695,46 @@ private[immutable] object NVectorStatics {
     System.arraycopy(b, 0, dest, a.length, b.length)
     dest
   }
+}
+
+
+/** Helper methods and constants for NVector. */
+private[immutable] object NVectorStatics {
+
+  final def copyAppend1(a: Arr1, elem: Any): Arr1 = {
+    val alen = a.length
+    val ac = new Arr1(alen+1)
+    System.arraycopy(a, 0, ac, 0, alen)
+    ac(alen) = elem.asInstanceOf[AnyRef]
+    ac
+  }
+
+  final def copyAppend[T <: AnyRef](a: Array[T], elem: T): Array[T] = {
+    val ac = copyOf(a, a.length+1)
+    ac(ac.length-1) = elem
+    ac
+  }
+
+  final def copyPrepend1(elem: Any, a: Arr1): Arr1 = {
+    val ac = new Arr1(a.length+1)
+    System.arraycopy(a, 0, ac, 1, a.length)
+    ac(0) = elem.asInstanceOf[AnyRef]
+    ac
+  }
+
+  final def copyPrepend[T <: AnyRef](elem: T, a: Array[T]): Array[T] = {
+    val ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length+1).asInstanceOf[Array[T]]
+    System.arraycopy(a, 0, ac, 1, a.length)
+    ac(0) = elem
+    ac
+  }
+
+  final val empty1: Arr1 = new Array(0)
+  final val empty2: Arr2 = new Array(0)
+  final val empty3: Arr3 = new Array(0)
+  final val empty4: Arr4 = new Array(0)
+  final val empty5: Arr5 = new Array(0)
+  final val empty6: Arr6 = new Array(0)
 
   final def foreachRec[T <: AnyRef, A, U](level: Int, a: Array[T], f: A => U): Unit = {
     var i = 0
@@ -1691,63 +1752,10 @@ private[immutable] object NVectorStatics {
       }
     }
   }
-
-  final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
-    var i = 0
-    while(i < a.length) {
-      val v1 = a(i).asInstanceOf[AnyRef]
-      val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
-      if(v1 ne v2)
-        return mapElems1Rest(a, f, i, v2)
-      i += 1
-    }
-    a
-  }
-
-  private[this] final def mapElems1Rest[A, B](a: Arr1, f: A => B, at: Int, v2: AnyRef): Arr1 = {
-    var ac = new Arr1(a.length)
-    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
-    ac(at) = v2
-    var i = at+1
-    while(i < a.length) {
-      ac(i) = f(a(i).asInstanceOf[A]).asInstanceOf[AnyRef]
-      i += 1
-    }
-    ac
-  }
-
-  final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
-    if(n == 1)
-      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
-    else {
-      var i = 0
-      while(i < a.length) {
-        val v1 = a(i)
-        val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
-        if(v1 ne v2)
-          return mapElemsRest(n, a, f, i, v2)
-        i += 1
-      }
-      a
-    }
-  }
-
-  private[this] final def mapElemsRest[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B, at: Int, v2: AnyRef): Array[T] = {
-    var ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
-    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
-    ac(at) = v2
-    var i = at+1
-    while(i < a.length) {
-      ac(i) = mapElems(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
-      i += 1
-    }
-    ac.asInstanceOf[Array[T]]
-  }
 }
 
 
 private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] var totalLength: Int, private[this] val sliceCount: Int) extends Iterator[A] with java.lang.Cloneable {
-  import NVectorStatics._
 
   private[this] var a1: Arr1 = v.prefix1
   private[this] var a2: Arr2 = _
