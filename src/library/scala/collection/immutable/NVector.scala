@@ -21,36 +21,36 @@ import java.util.{Arrays, Spliterator}
 import java.util.Arrays.{copyOf, copyOfRange}
 import java.lang.Math.{abs, max => mmax, min => mmin}
 
-import NVectorInline._
-import NVectorStatics._
+import VectorInline._
+import VectorStatics._
 import scala.collection.Stepper.EfficientSplit
 
 
 /** $factoryInfo
-  * @define Coll `NVector`
+  * @define Coll `Vector`
   * @define coll vector
   */
 @SerialVersionUID(3L)
-object NVector extends StrictOptimizedSeqFactory[NVector] {
+object Vector extends StrictOptimizedSeqFactory[Vector] {
 
-  def empty[A]: NVector[A] = NVector0
+  def empty[A]: Vector[A] = Vector0
 
-  def from[E](it: collection.IterableOnce[E]): NVector[E] =
+  def from[E](it: collection.IterableOnce[E]): Vector[E] =
     it match {
-      case v: NVector[E] => v
+      case v: Vector[E] => v
       case _ =>
         val knownSize = it.knownSize
         if (knownSize == 0) empty[E]
         else if (knownSize > 0 && knownSize <= WIDTH) {
           val a1 = new Array[Any](knownSize)
           it.iterator.copyToArray(a1)
-          new NVector1[E](a1.asInstanceOf[Arr1])
+          new Vector1[E](a1.asInstanceOf[Arr1])
         } else {
           (newBuilder ++= it).result()
         }
     }
 
-  def newBuilder[A]: ReusableBuilder[A, NVector[A]] = new NVectorBuilder[A]
+  def newBuilder[A]: ReusableBuilder[A, Vector[A]] = new VectorBuilder[A]
 
   /** Create a Vector with the same element at each index.
     *
@@ -58,10 +58,10 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
     * compute different values for each index, this method guarantees that all
     * elements are identical. This allows sparse allocation in O(log n) time and space.
     */
-  def fillSparse[A](n: Int)(elem: A): NVector[A] = {
-    if(n <= 0) NVector0
+  def fillSparse[A](n: Int)(elem: A): Vector[A] = {
+    if(n <= 0) Vector0
     else {
-      val b = new NVectorBuilder[A]
+      val b = new VectorBuilder[A]
       b.initSparse(n, elem)
       b.result()
     }
@@ -74,7 +74,7 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
       case _: SecurityException => 250
     }
 
-  private val emptyIterator = new NVectorIterator(NVector0, 0, 0)
+  private val emptyIterator = new NewVectorIterator(Vector0, 0, 0)
 }
 
 
@@ -99,61 +99,67 @@ object NVector extends StrictOptimizedSeqFactory[NVector] {
   * In addition to the data slices (`prefix1`, `prefix2`, ..., `dataN`, ..., `suffix2`, `suffix1`) we store a running
   * count of elements after each prefix for more efficient indexing without having to dereference all prefix arrays.
   */
-sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
+sealed abstract class Vector[+A] private[immutable] (private[immutable] final val prefix1: Arr1)
   extends AbstractSeq[A]
     with IndexedSeq[A]
-    with IndexedSeqOps[A, NVector, NVector[A]]
-    with StrictOptimizedSeqOps[A, NVector, NVector[A]]
-    with IterableFactoryDefaults[A, NVector]
+    with IndexedSeqOps[A, Vector, Vector[A]]
+    with StrictOptimizedSeqOps[A, Vector, Vector[A]]
+    with IterableFactoryDefaults[A, Vector]
     with DefaultSerializable {
 
-  override def iterableFactory: SeqFactory[NVector] = NVector
+  override def iterableFactory: SeqFactory[Vector] = Vector
 
   protected[this] def tinyAppendLimit: Int = 4 + vectorSliceCount
 
   override final def length: Int =
-    if(this.isInstanceOf[BigNVector[_]]) this.asInstanceOf[BigNVector[_]].length0
+    if(this.isInstanceOf[BigVector[_]]) this.asInstanceOf[BigVector[_]].length0
     else prefix1.length
 
   override final def iterator: Iterator[A] =
-    if(this.isInstanceOf[NVector0.type]) NVector.emptyIterator
-    else new NVectorIterator(this, length, vectorSliceCount)
+    if(this.isInstanceOf[Vector0.type]) Vector.emptyIterator
+    else new NewVectorIterator(this, length, vectorSliceCount)
 
-  override final def appendedAll[B >: A](suffix: collection.IterableOnce[B]): NVector[B] = {
+  // Dummy overrides to refine result types for binary compatibility:
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = super.updated(index, elem)
+  override def appended[B >: A](elem: B): Vector[B] = super.appended(elem)
+  override def prepended[B >: A](elem: B): Vector[B] = super.prepended(elem)
+  override def prependedAll[B >: A](prefix: collection.IterableOnce[B]): Vector[B] = super.prependedAll(prefix)
+
+  override final def appendedAll[B >: A](suffix: collection.IterableOnce[B]): Vector[B] = {
     val k = suffix.knownSize
     if(k == 0) this
     else appendedAll0(suffix, k)
   }
 
-  protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     if(k > 0 && k < tinyAppendLimit) {
-      var v: NVector[B] = this
+      var v: Vector[B] = this
       suffix match {
         case it: Iterable[_] => it.foreach(x => v = v.appended(x))
         case _ => suffix.iterator.foreach(x => v = v.appended(x))
       }
       v
-    } else new NVectorBuilder[B].initFrom(this).addAll(suffix).result()
+    } else new VectorBuilder[B].initFrom(this).addAll(suffix).result()
   }
 
-  override def className = "NVector"
+  override def className = "Vector"
 
-  @inline override final def take(n: Int): NVector[A] = slice(0, n)
-  @inline override final def drop(n: Int): NVector[A] = slice(n, length)
-  @inline override final def takeRight(n: Int): NVector[A] = slice(length - mmax(n, 0), length)
-  @inline override final def dropRight(n: Int): NVector[A] = slice(0, length - mmax(n, 0))
-  override def tail: NVector[A] = slice(1, length)
-  override def init: NVector[A] = slice(0, length-1)
+  @inline override final def take(n: Int): Vector[A] = slice(0, n)
+  @inline override final def drop(n: Int): Vector[A] = slice(n, length)
+  @inline override final def takeRight(n: Int): Vector[A] = slice(length - mmax(n, 0), length)
+  @inline override final def dropRight(n: Int): Vector[A] = slice(0, length - mmax(n, 0))
+  override def tail: Vector[A] = slice(1, length)
+  override def init: Vector[A] = slice(0, length-1)
 
   /** Like slice but parameters must be 0 <= lo < hi < length */
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A]
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A]
 
-  override final def slice(from: Int, until: Int): NVector[A] = {
+  override final def slice(from: Int, until: Int): Vector[A] = {
     val lo = mmax(from, 0)
     val hi = mmin(until, length)
     val newlen = hi - lo
     if(newlen == length) this
-    else if(newlen <= 0) NVector0
+    else if(newlen <= 0) Vector0
     else slice0(lo, hi)
   }
 
@@ -166,17 +172,16 @@ sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
 
   override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = iterator.copyToArray(xs, start, len)
 
-  //override def toVector: Vector[A] = this
+  override def toVector: Vector[A] = this
 
-  override protected def applyPreferredMaxLength: Int = NVector.defaultApplyPreferredMaxLength
+  override protected def applyPreferredMaxLength: Int = Vector.defaultApplyPreferredMaxLength
 
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
-    import convert.impl._
     val s = shape.shape match {
-      case StepperShape.IntShape    => new IntNVectorStepper(iterator.asInstanceOf[NVectorIterator[Int]])
-      case StepperShape.LongShape   => new LongNVectorStepper(iterator.asInstanceOf[NVectorIterator[Long]])
-      case StepperShape.DoubleShape => new DoubleNVectorStepper(iterator.asInstanceOf[NVectorIterator[Double]])
-      case _                        => shape.parUnbox(new AnyNVectorStepper[A](iterator.asInstanceOf[NVectorIterator[A]]))
+      case StepperShape.IntShape    => new IntVectorStepper(iterator.asInstanceOf[NewVectorIterator[Int]])
+      case StepperShape.LongShape   => new LongVectorStepper(iterator.asInstanceOf[NewVectorIterator[Long]])
+      case StepperShape.DoubleShape => new DoubleVectorStepper(iterator.asInstanceOf[NewVectorIterator[Double]])
+      case _                        => shape.parUnbox(new AnyVectorStepper[A](iterator.asInstanceOf[NewVectorIterator[A]]))
     }
     s.asInstanceOf[S with EfficientSplit]
   }
@@ -189,8 +194,8 @@ sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
     catch { case _: NullPointerException => throw ioob(0) }
 
   override final def last: A = {
-    if(this.isInstanceOf[BigNVector[_]]) {
-      val v = this.asInstanceOf[BigNVector[_]]
+    if(this.isInstanceOf[BigVector[_]]) {
+      val v = this.asInstanceOf[BigVector[_]]
       v.suffix1(v.suffix1.length-1)
     } else prefix1(prefix1.length-1)
   }.asInstanceOf[A]
@@ -281,28 +286,28 @@ sealed abstract class NVector[+A](private[immutable] final val prefix1: Arr1)
 }
 
 
-/** Vector with suffix and length fields; all NVector subclasses except NVector1 extend this */
-private sealed abstract class BigNVector[+A](_prefix1: Arr1, private[immutable] val suffix1: Arr1, private[immutable] val length0: Int) extends NVector[A](_prefix1)
+/** Vector with suffix and length fields; all Vector subclasses except Vector1 extend this */
+private sealed abstract class BigVector[+A](_prefix1: Arr1, private[immutable] val suffix1: Arr1, private[immutable] val length0: Int) extends Vector[A](_prefix1)
 
 
 /** Empty vector */
-private final object NVector0 extends BigNVector[Nothing](empty1, empty1, 0) {
+private final object Vector0 extends BigVector[Nothing](empty1, empty1, 0) {
 
   def apply(index: Int) = throw ioob(index)
 
-  override def updated[B >: Nothing](index: Int, elem: B): NVector[B] = throw ioob(index)
+  override def updated[B >: Nothing](index: Int, elem: B): Vector[B] = throw ioob(index)
 
-  override def appended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
+  override def appended[B >: Nothing](elem: B): Vector[B] = new Vector1(wrap1(elem))
 
-  override def prepended[B >: Nothing](elem: B): NVector[B] = new NVector1(wrap1(elem))
+  override def prepended[B >: Nothing](elem: B): Vector[B] = new Vector1(wrap1(elem))
 
-  override def map[B](f: Nothing => B): NVector[B] = this
+  override def map[B](f: Nothing => B): Vector[B] = this
 
-  override def tail: NVector[Nothing] = throw new UnsupportedOperationException("empty.tail")
+  override def tail: Vector[Nothing] = throw new UnsupportedOperationException("empty.tail")
 
-  override def init: NVector[Nothing] = throw new UnsupportedOperationException("empty.init")
+  override def init: Vector[Nothing] = throw new UnsupportedOperationException("empty.init")
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[Nothing] = this
+  protected[this] def slice0(lo: Int, hi: Int): Vector[Nothing] = this
 
   protected[immutable] def vectorSliceCount: Int = 0
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = null
@@ -311,83 +316,77 @@ private final object NVector0 extends BigNVector[Nothing](empty1, empty1, 0) {
   override def equals(o: Any): Boolean = {
     if(this eq o.asInstanceOf[AnyRef]) true
     else o match {
-      case that: NVector[_] => false
+      case that: Vector[_] => false
       case o => super.equals(o)
     }
   }
 
-  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[Nothing, S]): S with EfficientSplit =
-    empty1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
-
-  override protected[this]def appendedAll0[B >: Nothing](suffix: collection.IterableOnce[B], k: Int): NVector[B] =
-    NVector.from(suffix)
+  override protected[this]def appendedAll0[B >: Nothing](suffix: collection.IterableOnce[B], k: Int): Vector[B] =
+    Vector.from(suffix)
 
   override protected[this] def ioob(index: Int) =
     new IndexOutOfBoundsException(s"$index is out of bounds (empty vector)")
 }
 
 /** Flat ArraySeq-like structure */
-private final class NVector1[+A](_data1: Arr1) extends NVector[A](_data1) {
+private final class Vector1[+A](_data1: Arr1) extends Vector[A](_data1) {
 
   @inline def apply(index: Int): A =
     try prefix1(index).asInstanceOf[A]
     catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] =
-    try new NVector1(copyUpdate(prefix1, index, elem))
+  override def updated[B >: A](index: Int, elem: B): Vector[B] =
+    try new Vector1(copyUpdate(prefix1, index, elem))
     catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     val len1 = prefix1.length
-    if(len1 < WIDTH) new NVector1(copyAppend1(prefix1, elem))
-    else new NVector2(prefix1, WIDTH, empty2, wrap1(elem), WIDTH+1)
+    if(len1 < WIDTH) new Vector1(copyAppend1(prefix1, elem))
+    else new Vector2(prefix1, WIDTH, empty2, wrap1(elem), WIDTH+1)
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     val len1 = prefix1.length
-    if(len1 < WIDTH) new NVector1(copyPrepend1(elem, prefix1))
-    else new NVector2(wrap1(elem), 1, empty2, prefix1, len1+1)
+    if(len1 < WIDTH) new Vector1(copyPrepend1(elem, prefix1))
+    else new Vector2(wrap1(elem), 1, empty2, prefix1, len1+1)
   }
 
-  override def map[B](f: A => B): NVector[B] = new NVector1(mapElems1(prefix1, f))
+  override def map[B](f: A => B): Vector[B] = new Vector1(mapElems1(prefix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] =
-    new NVector1(copyOfRange(prefix1, lo, hi))
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] =
+    new Vector1(copyOfRange(prefix1, lo, hi))
 
-  override def tail: NVector[A] =
-    if(prefix1.length == 1) NVector0
-    else new NVector1(copyTail(prefix1))
+  override def tail: Vector[A] =
+    if(prefix1.length == 1) Vector0
+    else new Vector1(copyTail(prefix1))
 
-  override def init: NVector[A] =
-    if(prefix1.length == 1) NVector0
-    else new NVector1(copyInit(prefix1))
+  override def init: Vector[A] =
+    if(prefix1.length == 1) Vector0
+    else new Vector1(copyInit(prefix1))
 
   protected[immutable] def vectorSliceCount: Int = 1
   protected[immutable] def vectorSlice(idx: Int): Array[_ <: AnyRef] = prefix1
   protected[immutable] def vectorSlicePrefixLength(idx: Int): Int = prefix1.length
 
-  override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit =
-    prefix1.stepper(shape.asInstanceOf[StepperShape[AnyRef, S]])
-
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val data1b = append1IfSpace(prefix1, suffix)
-    if(data1b ne null) new NVector1(data1b)
+    if(data1b ne null) new Vector1(data1b)
     else super.appendedAll0(suffix, k)
   }
 }
 
 
 /** 2-dimensional radix-balanced finger tree */
-private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+private final class Vector2[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
                                  private[immutable] final val data2: Arr2,
                                  _suffix1: Arr1,
-                                 _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
+                                 _length0: Int) extends BigVector[A](_prefix1, _suffix1, _length0) {
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  data2: Arr2 = data2,
                                  suffix1: Arr1 = suffix1,
                                  length0: Int = length0) =
-    new NVector2(prefix1, len1, data2, suffix1, length0)
+    new Vector2(prefix1, len1, data2, suffix1, length0)
 
   @inline def apply(index: Int): A = {
     try {
@@ -401,7 +400,7 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
     } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
   }.asInstanceOf[A]
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] = try {
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = try {
     if(index >= len1) {
       val io = index - len1
       val i2 = io >>> BITS
@@ -413,34 +412,34 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
     }
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(data2.length   < WIDTH-2) copy(data2 = copyAppend(data2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
-    else new NVector3(prefix1, len1, data2, WIDTH*(WIDTH-2) + len1, empty3, wrap2(suffix1), wrap1(elem), length0+1)
+    else new Vector3(prefix1, len1, data2, WIDTH*(WIDTH-2) + len1, empty3, wrap2(suffix1), wrap1(elem), length0+1)
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     if     (len1         < WIDTH  ) copy(copyPrepend1(elem, prefix1), len1+1, length0 = length0+1)
     else if(data2.length < WIDTH-2) copy(wrap1(elem), 1, copyPrepend(prefix1, data2), length0 = length0+1)
-    else new NVector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length0+1)
+    else new Vector3(wrap1(elem), 1, wrap2(prefix1), len1+1, empty3, data2, suffix1, length0+1)
   }
 
-  override def map[B](f: A => B): NVector[B] =
+  override def map[B](f: A => B): Vector[B] =
     copy(prefix1 = mapElems1(prefix1, f), data2 = mapElems(2, data2, f), suffix1 = mapElems1(suffix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
-    val b = new NVectorSliceBuilder(lo, hi)
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] = {
+    val b = new VectorSliceBuilder(lo, hi)
     b.consider(1, prefix1)
     b.consider(2, data2)
     b.consider(1, suffix1)
     b.result()
   }
 
-  override def tail: NVector[A] =
+  override def tail: Vector[A] =
     if(len1 > 1) copy(copyTail(prefix1), len1-1, length0 = length0-1)
     else slice0(1, length0)
 
-  override def init: NVector[A] =
+  override def init: Vector[A] =
     if(suffix1.length > 1) copy(suffix1 = copyInit(suffix1), length0 = length0-1)
     else slice0(0, length0-1)
 
@@ -456,7 +455,7 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
     case 2 => length0
   }
 
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -465,18 +464,18 @@ private final class NVector2[+A](_prefix1: Arr1, private[immutable] final val le
 
 
 /** 3-dimensional radix-balanced finger tree */
-private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+private final class Vector3[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
                                  private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
                                  private[immutable] final val data3: Arr3,
                                  private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
-                                 _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
+                                 _length0: Int) extends BigVector[A](_prefix1, _suffix1, _length0) {
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
                                  data3: Arr3 = data3,
                                  suffix2: Arr2 = suffix2, suffix1: Arr1 = suffix1,
                                  length0: Int = length0) =
-    new NVector3(prefix1, len1, prefix2, len12, data3, suffix2, suffix1, length0)
+    new Vector3(prefix1, len1, prefix2, len12, data3, suffix2, suffix1, length0)
 
   @inline def apply(index: Int): A = {
     try {
@@ -495,7 +494,7 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
     } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
   }.asInstanceOf[A]
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] = try {
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = try {
     if(index >= len12) {
       val io = index - len12
       val i3 = io >>> BITS2
@@ -512,27 +511,27 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
     }
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(data3.length   < WIDTH-2) copy(data3 = copyAppend(data3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
-    else new NVector4(prefix1, len1, prefix2, len12, data3, (WIDTH-2)*WIDTH2 + len12, empty4, wrap3(copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length0+1)
+    else new Vector4(prefix1, len1, prefix2, len12, data3, (WIDTH-2)*WIDTH2 + len12, empty4, wrap3(copyAppend(suffix2, suffix1)), empty2, wrap1(elem), length0+1)
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     if     (len1         < WIDTH  ) copy(prefix1 = copyPrepend1(elem, prefix1), len1 = len1+1, len12 = len12+1, length0 = length0+1)
     else if(len12        < WIDTH2 ) copy(prefix1 = wrap1(elem), len1 = 1, prefix2 = copyPrepend(prefix1, prefix2), len12 = len12+1, length0 = length0+1)
     else if(data3.length < WIDTH-2) copy(prefix1 = wrap1(elem), len1 = 1, prefix2 = empty2, len12 = 1, data3 = copyPrepend(copyPrepend(prefix1, prefix2), data3), length0 = length0+1)
-    else new NVector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length0+1)
+    else new Vector4(wrap1(elem), 1, empty2, 1, wrap3(copyPrepend(prefix1, prefix2)), len12+1, empty4, data3, suffix2, suffix1, length0+1)
   }
 
-  override def map[B](f: A => B): NVector[B] =
+  override def map[B](f: A => B): Vector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f),
       data3 = mapElems(3, data3, f),
       suffix2 = mapElems(2, suffix2, f), suffix1 = mapElems1(suffix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
-    val b = new NVectorSliceBuilder(lo, hi)
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] = {
+    val b = new VectorSliceBuilder(lo, hi)
     b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, data3)
@@ -541,11 +540,11 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
     b.result()
   }
 
-  override def tail: NVector[A] =
+  override def tail: Vector[A] =
     if(len1 > 1) copy(prefix1 = copyTail(prefix1), len1 = len1-1, len12 = len12-1, length0 = length0-1)
     else slice0(1, length0)
 
-  override def init: NVector[A] =
+  override def init: Vector[A] =
     if(suffix1.length > 1) copy(suffix1 = copyInit(suffix1), length0 = length0-1)
     else slice0(0, length0-1)
 
@@ -565,7 +564,7 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
     case 4 => length0
   }
 
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -574,12 +573,12 @@ private final class NVector3[+A](_prefix1: Arr1, private[immutable] final val le
 
 
 /** 4-dimensional radix-balanced finger tree */
-private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+private final class Vector4[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
                                  private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
                                  private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
                                  private[immutable] final val data4: Arr4,
                                  private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
-                                 _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
+                                 _length0: Int) extends BigVector[A](_prefix1, _suffix1, _length0) {
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -587,7 +586,7 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
                                  data4: Arr4 = data4,
                                  suffix3: Arr3 = suffix3, suffix2: Arr2 = suffix2, suffix1: Arr1 = suffix1,
                                  length0: Int = length0) =
-    new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length0)
+    new Vector4(prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, length0)
 
   @inline def apply(index: Int): A = {
     try {
@@ -611,7 +610,7 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
     } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
   }.asInstanceOf[A]
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] = try {
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = try {
     if(index >= len123) {
       val io = index - len123
       val i4 = io >>> BITS3
@@ -633,29 +632,29 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
     }
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(data4.length   < WIDTH-2) copy(data4   = copyAppend(data4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
-    else new NVector5(prefix1, len1, prefix2, len12, prefix3, len123, data4, (WIDTH-2)*WIDTH3 + len123, empty5, wrap4(copyAppend(suffix3, copyAppend(suffix2, suffix1))), empty3, empty2, wrap1(elem), length0+1)
+    else new Vector5(prefix1, len1, prefix2, len12, prefix3, len123, data4, (WIDTH-2)*WIDTH3 + len123, empty5, wrap4(copyAppend(suffix3, copyAppend(suffix2, suffix1))), empty3, empty2, wrap1(elem), length0+1)
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     if     (len1         < WIDTH  ) copy(copyPrepend1(elem, prefix1), len1+1, len12 = len12+1, len123 = len123+1, length0 = length0+1)
     else if(len12        < WIDTH2 ) copy(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, len123 = len123+1, length0 = length0+1)
     else if(len123       < WIDTH3 ) copy(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, length0 = length0+1)
     else if(data4.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), data4), length0 = length0+1)
-    else new NVector5(wrap1(elem), 1, empty2, 1, empty3, 1, wrap4(copyPrepend(copyPrepend(prefix1, prefix2), prefix3)), len123+1, empty5, data4, suffix3, suffix2, suffix1, length0+1)
+    else new Vector5(wrap1(elem), 1, empty2, 1, empty3, 1, wrap4(copyPrepend(copyPrepend(prefix1, prefix2), prefix3)), len123+1, empty5, data4, suffix3, suffix2, suffix1, length0+1)
   }
 
-  override def map[B](f: A => B): NVector[B] =
+  override def map[B](f: A => B): Vector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f),
       data4 = mapElems(4, data4, f),
       suffix3 = mapElems(3, suffix3, f), suffix2 = mapElems(2, suffix2, f), suffix1 = mapElems1(suffix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
-    val b = new NVectorSliceBuilder(lo, hi)
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] = {
+    val b = new VectorSliceBuilder(lo, hi)
     b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, prefix3)
@@ -666,11 +665,11 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
     b.result()
   }
 
-  override def tail: NVector[A] =
+  override def tail: Vector[A] =
     if(len1 > 1) copy(copyTail(prefix1), len1-1, len12 = len12-1, len123 = len123-1, length0 = length0-1)
     else slice0(1, length0)
 
-  override def init: NVector[A] =
+  override def init: Vector[A] =
     if(suffix1.length > 1) copy(suffix1 = copyInit(suffix1), length0 = length0-1)
     else slice0(0, length0-1)
 
@@ -694,7 +693,7 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
     case 6 => length0
   }
 
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -703,13 +702,13 @@ private final class NVector4[+A](_prefix1: Arr1, private[immutable] final val le
 
 
 /** 5-dimensional radix-balanced finger tree */
-private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+private final class Vector5[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
                                  private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
                                  private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
                                  private[immutable] final val prefix4: Arr4, private[immutable] final val len1234: Int,
                                  private[immutable] final val data5: Arr5,
                                  private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
-                                 _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
+                                 _length0: Int) extends BigVector[A](_prefix1, _suffix1, _length0) {
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -718,7 +717,7 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
                                  data5: Arr5 = data5,
                                  suffix4: Arr4 = suffix4, suffix3: Arr3 = suffix3, suffix2: Arr2 = suffix2, suffix1: Arr1 = suffix1,
                                  length0: Int = length0) =
-    new NVector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, length0)
+    new Vector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, length0)
 
   @inline def apply(index: Int): A = {
     try {
@@ -747,7 +746,7 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
     } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
   }.asInstanceOf[A]
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] = try {
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = try {
     if(index >= len1234) {
       val io = index - len1234
       val i5 = io >>> BITS4
@@ -774,31 +773,31 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
     }
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     if     (suffix1.length < WIDTH  ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix4.length < WIDTH-1) copy(suffix4 = copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1))), suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
     else if(data5.length   < WIDTH-2) copy(data5   = copyAppend(data5, copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1)))), suffix4 = empty4, suffix3 = empty3, suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
-    else new NVector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, (WIDTH-2)*WIDTH4 + len1234, empty6, wrap5(copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1)))), empty4, empty3, empty2, wrap1(elem), length0+1)
+    else new Vector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, (WIDTH-2)*WIDTH4 + len1234, empty6, wrap5(copyAppend(suffix4, copyAppend(suffix3, copyAppend(suffix2, suffix1)))), empty4, empty3, empty2, wrap1(elem), length0+1)
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     if     (len1         < WIDTH  ) copy(copyPrepend1(elem, prefix1), len1+1, len12 = len12+1, len123 = len123+1, len1234 = len1234+1, length0 = length0+1)
     else if(len12        < WIDTH2 ) copy(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, len123 = len123+1, len1234 = len1234+1, length0 = length0+1)
     else if(len123       < WIDTH3 ) copy(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, len1234 = len1234+1, length0 = length0+1)
     else if(len1234      < WIDTH4 ) copy(wrap1(elem), 1, empty2, 1, empty3, 1, copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), len1234+1, length0 = length0+1)
     else if(data5.length < WIDTH-2) copy(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, copyPrepend(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4), data5), length0 = length0+1)
-    else new NVector6(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, wrap5(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4)), len1234+1, empty6, data5, suffix4, suffix3, suffix2, suffix1, length0+1)
+    else new Vector6(wrap1(elem), 1, empty2, 1, empty3, 1, empty4, 1, wrap5(copyPrepend(copyPrepend(copyPrepend(prefix1, prefix2), prefix3), prefix4)), len1234+1, empty6, data5, suffix4, suffix3, suffix2, suffix1, length0+1)
   }
 
-  override def map[B](f: A => B): NVector[B] =
+  override def map[B](f: A => B): Vector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f), prefix4 = mapElems(4, prefix4, f),
       data5 = mapElems(5, data5, f),
       suffix4 = mapElems(4, suffix4, f), suffix3 = mapElems(3, suffix3, f), suffix2 = mapElems(2, suffix2, f), suffix1 = mapElems1(suffix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
-    val b = new NVectorSliceBuilder(lo, hi)
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] = {
+    val b = new VectorSliceBuilder(lo, hi)
     b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, prefix3)
@@ -811,11 +810,11 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
     b.result()
   }
 
-  override def tail: NVector[A] =
+  override def tail: Vector[A] =
     if(len1 > 1) copy(copyTail(prefix1), len1-1, len12 = len12-1, len123 = len123-1, len1234 = len1234-1, length0 = length0-1)
     else slice0(1, length0)
 
-  override def init: NVector[A] =
+  override def init: Vector[A] =
     if(suffix1.length > 1) copy(suffix1 = copyInit(suffix1), length0 = length0-1)
     else slice0(0, length0-1)
 
@@ -843,7 +842,7 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
     case 8 => length0
   }
 
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -852,14 +851,14 @@ private final class NVector5[+A](_prefix1: Arr1, private[immutable] final val le
 
 
 /** 6-dimensional radix-balanced finger tree */
-private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
+private final class Vector6[+A](_prefix1: Arr1, private[immutable] final val len1: Int,
                                  private[immutable] final val prefix2: Arr2, private[immutable] final val len12: Int,
                                  private[immutable] final val prefix3: Arr3, private[immutable] final val len123: Int,
                                  private[immutable] final val prefix4: Arr4, private[immutable] final val len1234: Int,
                                  private[immutable] final val prefix5: Arr5, private[immutable] final val len12345: Int,
                                  private[immutable] final val data6: Arr6,
                                  private[immutable] final val suffix5: Arr5, private[immutable] final val suffix4: Arr4, private[immutable] final val suffix3: Arr3, private[immutable] final val suffix2: Arr2, _suffix1: Arr1,
-                                 _length0: Int) extends BigNVector[A](_prefix1, _suffix1, _length0) {
+                                 _length0: Int) extends BigVector[A](_prefix1, _suffix1, _length0) {
 
   @inline private[this] def copy(prefix1: Arr1 = prefix1, len1: Int = len1,
                                  prefix2: Arr2 = prefix2, len12: Int = len12,
@@ -869,7 +868,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
                                  data6: Arr6 = data6,
                                  suffix5: Arr5 = suffix5, suffix4: Arr4 = suffix4, suffix3: Arr3 = suffix3, suffix2: Arr2 = suffix2, suffix1: Arr1 = suffix1,
                                  length0: Int = length0) =
-    new NVector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, length0)
+    new Vector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, length0)
 
   @inline def apply(index: Int): A = {
     try {
@@ -903,7 +902,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
   }.asInstanceOf[A]
 
-  override def updated[B >: A](index: Int, elem: B): NVector[B] = try {
+  override def updated[B >: A](index: Int, elem: B): Vector[B] = try {
     if(index >= len12345) {
       val io = index - len12345
       val i6 = io >>> BITS5
@@ -935,7 +934,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     }
   } catch { case _: ArrayIndexOutOfBoundsException => throw ioob(index) }
 
-  override def appended[B >: A](elem: B): NVector[B] = {
+  override def appended[B >: A](elem: B): Vector[B] = {
     if     (suffix1.length < WIDTH      ) copy(suffix1 = copyAppend1(suffix1, elem), length0 = length0+1)
     else if(suffix2.length < WIDTH-1    ) copy(suffix2 = copyAppend(suffix2, suffix1), suffix1 = wrap1(elem), length0 = length0+1)
     else if(suffix3.length < WIDTH-1    ) copy(suffix3 = copyAppend(suffix3, copyAppend(suffix2, suffix1)), suffix2 = empty2, suffix1 = wrap1(elem), length0 = length0+1)
@@ -945,7 +944,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     else throw new IllegalArgumentException
   }
 
-  override def prepended[B >: A](elem: B): NVector[B] = {
+  override def prepended[B >: A](elem: B): Vector[B] = {
     if     (len1         < WIDTH      ) copy(copyPrepend1(elem, prefix1), len1+1, len12 = len12+1, len123 = len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
     else if(len12        < WIDTH2     ) copy(wrap1(elem), 1, copyPrepend(prefix1, prefix2), len12+1, len123 = len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
     else if(len123       < WIDTH3     ) copy(wrap1(elem), 1, empty2, 1, copyPrepend(copyPrepend(prefix1, prefix2), prefix3), len123+1, len1234 = len1234+1, len12345 = len12345+1, length0 = length0+1)
@@ -955,13 +954,13 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     else throw new IllegalArgumentException
   }
 
-  override def map[B](f: A => B): NVector[B] =
+  override def map[B](f: A => B): Vector[B] =
     copy(prefix1 = mapElems1(prefix1, f), prefix2 = mapElems(2, prefix2, f), prefix3 = mapElems(3, prefix3, f), prefix4 = mapElems(4, prefix4, f), prefix5 = mapElems(5, prefix5, f),
       data6 = mapElems(6, data6, f),
       suffix5 = mapElems(5, suffix5, f), suffix4 = mapElems(4, suffix4, f), suffix3 = mapElems(3, suffix3, f), suffix2 = mapElems(2, suffix2, f), suffix1 = mapElems1(suffix1, f))
 
-  protected[this] def slice0(lo: Int, hi: Int): NVector[A] = {
-    val b = new NVectorSliceBuilder(lo, hi)
+  protected[this] def slice0(lo: Int, hi: Int): Vector[A] = {
+    val b = new VectorSliceBuilder(lo, hi)
     b.consider(1, prefix1)
     b.consider(2, prefix2)
     b.consider(3, prefix3)
@@ -976,11 +975,11 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     b.result()
   }
 
-  override def tail: NVector[A] =
+  override def tail: Vector[A] =
     if(len1 > 1) copy(copyTail(prefix1), len1-1, len12 = len12-1, len123 = len123-1, len1234 = len1234-1, len12345 = len12345-1, length0 = length0-1)
     else slice0(1, length0)
 
-  override def init: NVector[A] =
+  override def init: Vector[A] =
     if(suffix1.length > 1) copy(suffix1 = copyInit(suffix1), length0 = length0-1)
     else slice0(0, length0-1)
 
@@ -1012,7 +1011,7 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
     case 10 => length0
   }
 
-  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): NVector[B] = {
+  override protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
     val suffix1b = append1IfSpace(suffix1, suffix)
     if(suffix1b ne null) copy(suffix1 = suffix1b, length0 = length0-suffix1.length+suffix1b.length)
     else super.appendedAll0(suffix, k)
@@ -1026,8 +1025,8 @@ private final class NVector6[+A](_prefix1: Arr1, private[immutable] final val le
   * structure with the highest-dimensional data in the middle and fingers of decreasing dimension
   * at both ends, which can be turned into a new vector with very little rebalancing.
   */
-private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
-  //println(s"***** NVectorSliceBuilder($lo, $hi)")
+private final class VectorSliceBuilder(lo: Int, hi: Int) {
+  //println(s"***** VectorSliceBuilder($lo, $hi)")
 
   private[this] val slices = new Array[Array[AnyRef]](11)
   private[this] var len, pos, maxDim = 0
@@ -1089,9 +1088,9 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
     slices(idx) = a.asInstanceOf[Array[AnyRef]]
   }
 
-  def result[A](): NVector[A] = {
+  def result[A](): Vector[A] = {
     if(len <= 32) {
-      if(len == 0) NVector0
+      if(len == 0) Vector0
       else {
         val prefix1 = slices(prefixIdx(1))
         val suffix1 = slices(suffixIdx(1))
@@ -1108,7 +1107,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
               suffix2(0)
             }
           }
-        new NVector1(a)
+        new Vector1(a)
       }
     } else {
       balancePrefix(1)
@@ -1137,13 +1136,13 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
       val res = (resultDim: @switch) match {
         case 2 =>
           val data2 = dataOr(2, empty2)
-          new NVector2[A](prefix1, len1, data2, suffix1, len)
+          new Vector2[A](prefix1, len1, data2, suffix1, len)
         case 3 =>
           val prefix2 = prefixOr(2, empty2)
           val data3 = dataOr(3, empty3)
           val suffix2 = suffixOr(2, empty2)
           val len12 = len1 + (prefix2.length * WIDTH)
-          new NVector3[A](prefix1, len1, prefix2, len12, data3, suffix2, suffix1, len)
+          new Vector3[A](prefix1, len1, prefix2, len12, data3, suffix2, suffix1, len)
         case 4 =>
           val prefix2 = prefixOr(2, empty2)
           val prefix3 = prefixOr(3, empty3)
@@ -1152,7 +1151,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           val suffix2 = suffixOr(2, empty2)
           val len12 = len1 + (prefix2.length * WIDTH)
           val len123 = len12 + (prefix3.length * WIDTH2)
-          new NVector4[A](prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, len)
+          new Vector4[A](prefix1, len1, prefix2, len12, prefix3, len123, data4, suffix3, suffix2, suffix1, len)
         case 5 =>
           val prefix2 = prefixOr(2, empty2)
           val prefix3 = prefixOr(3, empty3)
@@ -1164,7 +1163,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           val len12 = len1 + (prefix2.length * WIDTH)
           val len123 = len12 + (prefix3.length * WIDTH2)
           val len1234 = len123 + (prefix4.length * WIDTH3)
-          new NVector5[A](prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, len)
+          new Vector5[A](prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data5, suffix4, suffix3, suffix2, suffix1, len)
         case 6 =>
           val prefix2 = prefixOr(2, empty2)
           val prefix3 = prefixOr(3, empty3)
@@ -1179,7 +1178,7 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
           val len123 = len12 + (prefix3.length * WIDTH2)
           val len1234 = len123 + (prefix4.length * WIDTH3)
           val len12345 = len1234 + (prefix5.length * WIDTH4)
-          new NVector6[A](prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, len)
+          new Vector6[A](prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data6, suffix5, suffix4, suffix3, suffix2, suffix1, len)
       }
       res
     }
@@ -1247,13 +1246,13 @@ private[immutable] final class NVectorSliceBuilder(lo: Int, hi: Int) {
   }
 
   override def toString: String =
-    s"NVectorSliceBuilder(lo=$lo, hi=$hi, len=$len, pos=$pos, maxDim=$maxDim)"
+    s"VectorSliceBuilder(lo=$lo, hi=$hi, len=$len, pos=$pos, maxDim=$maxDim)"
 
   private[immutable] def getSlices: Array[Array[AnyRef]] = slices
 }
 
 
-private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
+final class VectorBuilder[A] extends ReusableBuilder[A, Vector[A]] {
 
   private[this] var a6: Arr6 = _
   private[this] var a5: Arr5 = _
@@ -1271,6 +1270,10 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
 
   override def knownSize: Int = len1 + lenRest - offset
 
+  @inline def size: Int = knownSize
+  @inline def isEmpty: Boolean = knownSize == 0
+  @inline def nonEmpty: Boolean = knownSize != 0
+
   def clear(): Unit = {
     a6 = null
     a5 = null
@@ -1284,7 +1287,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     depth = 1
   }
 
-  def initSparse(size: Int, elem: A): Unit = {
+  private[immutable] def initSparse(size: Int, elem: A): Unit = {
     setLen(size)
     Arrays.fill(a1, elem)
     if(size > WIDTH) {
@@ -1310,16 +1313,16 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     } else depth = 1
   }
 
-  def initFrom(v: NVector[_]): this.type = {
+  private[immutable] def initFrom(v: Vector[_]): this.type = {
     (v.vectorSliceCount: @switch) match {
       case 0 =>
       case 1 =>
-        val v1 = v.asInstanceOf[NVector1[_]]
+        val v1 = v.asInstanceOf[Vector1[_]]
         depth = 1
         setLen(v1.prefix1.length)
         a1 = copyOrUse(v1.prefix1, 0, WIDTH)
       case 3 =>
-        val v2 = v.asInstanceOf[NVector2[_]]
+        val v2 = v.asInstanceOf[Vector2[_]]
         val d2 = v2.data2
         a1 = copyOrUse(v2.suffix1, 0, WIDTH)
         depth = 2
@@ -1330,7 +1333,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         System.arraycopy(d2, 0, a2, 1, d2.length)
         a2(d2.length+1) = a1
       case 5 =>
-        val v3 = v.asInstanceOf[NVector3[_]]
+        val v3 = v.asInstanceOf[Vector3[_]]
         val d3 = v3.data3
         val s2 = v3.suffix2
         a1 = copyOrUse(v3.suffix1, 0, WIDTH)
@@ -1344,7 +1347,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a3(d3.length+1) = a2
         a2(s2.length) = a1
       case 7 =>
-        val v4 = v.asInstanceOf[NVector4[_]]
+        val v4 = v.asInstanceOf[Vector4[_]]
         val d4 = v4.data4
         val s3 = v4.suffix3
         val s2 = v4.suffix2
@@ -1361,7 +1364,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a3(s3.length) = a2
         a2(s2.length) = a1
       case 9 =>
-        val v5 = v.asInstanceOf[NVector5[_]]
+        val v5 = v.asInstanceOf[Vector5[_]]
         val d5 = v5.data5
         val s4 = v5.suffix4
         val s3 = v5.suffix3
@@ -1381,7 +1384,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
         a3(s3.length) = a2
         a2(s2.length) = a1
       case 11 =>
-        val v6 = v.asInstanceOf[NVector6[_]]
+        val v6 = v.asInstanceOf[Vector6[_]]
         val d6 = v6.data6
         val s5 = v6.suffix5
         val s4 = v6.suffix4
@@ -1435,7 +1438,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     }
   }
 
-  private[this] def addVector(xs: NVector[A]): this.type = {
+  private[this] def addVector(xs: Vector[A]): this.type = {
     val sliceCount = xs.vectorSliceCount
     var sliceIdx = 0
     while(sliceIdx < sliceCount) {
@@ -1450,7 +1453,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
   }
 
   override def addAll(xs: IterableOnce[A]): this.type = xs match {
-    case v: NVector[_] =>
+    case v: Vector[_] =>
       if(len1 == 0 && lenRest == 0) initFrom(v)
       else addVector(v)
     case _ =>
@@ -1511,20 +1514,20 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
     }
   }
 
-  def result(): NVector[A] = {
+  def result(): Vector[A] = {
     val len = len1 + lenRest
     val realLen = len - offset
-    if(realLen == 0) NVector.empty
+    if(realLen == 0) Vector.empty
     else if(len <= WIDTH) {
-      if(realLen == WIDTH) new NVector1(a1)
-      else new NVector1(copyOf(a1, realLen))
+      if(realLen == WIDTH) new Vector1(a1)
+      else new Vector1(copyOf(a1, realLen))
     } else if(len <= WIDTH2) {
       val i1 = (len-1) & MASK
       val i2 = (len-1) >>> BITS
       val data = copyOfRange(a2, 1, i2)
       val prefix1 = a2(0)
       val suffix1 = copyIfDifferentSize(a2(i2), i1+1)
-      new NVector2(prefix1, WIDTH-offset, data, suffix1, realLen)
+      new Vector2(prefix1, WIDTH-offset, data, suffix1, realLen)
     } else if(len <= WIDTH3) {
       val i1 = (len-1) & MASK
       val i2 = ((len-1) >>> BITS) & MASK
@@ -1536,7 +1539,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val suffix1 = copyIfDifferentSize(a3(i3)(i2), i1+1)
       val len1 = prefix1.length
       val len12 = len1 + prefix2.length*WIDTH
-      new NVector3(prefix1, len1, prefix2, len12, data, suffix2, suffix1, realLen)
+      new Vector3(prefix1, len1, prefix2, len12, data, suffix2, suffix1, realLen)
     } else if(len <= WIDTH4) {
       val i1 = (len-1) & MASK
       val i2 = ((len-1) >>> BITS) & MASK
@@ -1552,7 +1555,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val len1 = prefix1.length
       val len12 = len1 + prefix2.length*WIDTH
       val len123 = len12 + prefix3.length*WIDTH2
-      new NVector4(prefix1, len1, prefix2, len12, prefix3, len123, data, suffix3, suffix2, suffix1, realLen)
+      new Vector4(prefix1, len1, prefix2, len12, prefix3, len123, data, suffix3, suffix2, suffix1, realLen)
     } else if(len <= WIDTH5) {
       val i1 = (len-1) & MASK
       val i2 = ((len-1) >>> BITS) & MASK
@@ -1572,7 +1575,7 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val len12 = len1 + prefix2.length*WIDTH
       val len123 = len12 + prefix3.length*WIDTH2
       val len1234 = len123 + prefix4.length*WIDTH3
-      new NVector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data, suffix4, suffix3, suffix2, suffix1, realLen)
+      new Vector5(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, data, suffix4, suffix3, suffix2, suffix1, realLen)
     } else {
       val i1 = (len-1) & MASK
       val i2 = ((len-1) >>> BITS) & MASK
@@ -1596,19 +1599,19 @@ private final class NVectorBuilder[A] extends ReusableBuilder[A, NVector[A]] {
       val len123 = len12 + prefix3.length*WIDTH2
       val len1234 = len123 + prefix4.length*WIDTH3
       val len12345 = len1234 + prefix5.length*WIDTH4
-      new NVector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data, suffix5, suffix4, suffix3, suffix2, suffix1, realLen)
+      new Vector6(prefix1, len1, prefix2, len12, prefix3, len123, prefix4, len1234, prefix5, len12345, data, suffix5, suffix4, suffix3, suffix2, suffix1, realLen)
     }
   }
 
   override def toString: String =
-    s"NVectorBuilder(len1=$len1, lenRest=$lenRest, offset=$offset, depth=$depth)"
+    s"VectorBuilder(len1=$len1, lenRest=$lenRest, offset=$offset, depth=$depth)"
 
   private[immutable] def getData: Array[Array[_]] = Array(a1, a2, a3, a4, a5, a6)
 }
 
 
-/** Compile-time definitions for NVector. No references to this object should appear in bytecode. */
-private[immutable] object NVectorInline {
+/** Compile-time definitions for Vector. No references to this object should appear in bytecode. */
+private[immutable] object VectorInline {
   // compile-time numeric constants
   final val BITS = 5
   final val WIDTH = 1 << BITS
@@ -1698,8 +1701,8 @@ private[immutable] object NVectorInline {
 }
 
 
-/** Helper methods and constants for NVector. */
-private[immutable] object NVectorStatics {
+/** Helper methods and constants for Vector. */
+private object VectorStatics {
 
   final def copyAppend1(a: Arr1, elem: Any): Arr1 = {
     val alen = a.length
@@ -1755,7 +1758,7 @@ private[immutable] object NVectorStatics {
 }
 
 
-private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] var totalLength: Int, private[this] val sliceCount: Int) extends Iterator[A] with java.lang.Cloneable {
+private final class NewVectorIterator[A](v: Vector[A], private[this] var totalLength: Int, private[this] val sliceCount: Int) extends Iterator[A] with java.lang.Cloneable {
 
   private[this] var a1: Arr1 = v.prefix1
   private[this] var a2: Arr2 = _
@@ -1774,7 +1777,7 @@ private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] v
   private[this] var sliceEnd = a1len // absolute position
 
   //override def toString: String =
-  //  s"NVectorIterator(v=$v, totalLength=$totalLength, sliceCount=$sliceCount): a1len=$a1len, len1=$len1, i1=$i1, sliceEnd=$sliceEnd"
+  //  s"NewVectorIterator(v=$v, totalLength=$totalLength, sliceCount=$sliceCount): a1len=$a1len, len1=$len1, i1=$i1, sliceEnd=$sliceEnd"
 
   @inline override def knownSize = len1 - i1
 
@@ -1933,8 +1936,8 @@ private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] v
     total
   }
 
-  protected[immutable] def split(at: Int): NVectorIterator[A] = {
-    val it2 = clone().asInstanceOf[NVectorIterator[A]]
+  protected[immutable] def split(at: Int): NewVectorIterator[A] = {
+    val it2 = clone().asInstanceOf[NewVectorIterator[A]]
     it2.take(at)
     drop(at)
     it2
@@ -1942,10 +1945,10 @@ private[immutable] final class NVectorIterator[A](v: NVector[A], private[this] v
 }
 
 
-private[immutable] abstract class NVectorStepperBase[A, Sub >: Null <: Stepper[A], Semi <: Sub](it: NVectorIterator[A])
+private abstract class VectorStepperBase[A, Sub >: Null <: Stepper[A], Semi <: Sub](it: NewVectorIterator[A])
   extends Stepper[A] with EfficientSplit {
 
-  protected[this] def build(it: NVectorIterator[A]): Semi
+  protected[this] def build(it: NewVectorIterator[A]): Semi
 
   final def hasStep: Boolean = it.hasNext
 
@@ -1962,26 +1965,26 @@ private[immutable] abstract class NVectorStepperBase[A, Sub >: Null <: Stepper[A
   override final def iterator: Iterator[A] = it
 }
 
-private[immutable] class AnyNVectorStepper[A](it: NVectorIterator[A])
-  extends NVectorStepperBase[A, AnyStepper[A], AnyNVectorStepper[A]](it) with AnyStepper[A] {
-  protected[this] def build(it: NVectorIterator[A]) = new AnyNVectorStepper(it)
+private class AnyVectorStepper[A](it: NewVectorIterator[A])
+  extends VectorStepperBase[A, AnyStepper[A], AnyVectorStepper[A]](it) with AnyStepper[A] {
+  protected[this] def build(it: NewVectorIterator[A]) = new AnyVectorStepper(it)
   def nextStep(): A = it.next()
 }
 
-private[immutable] class DoubleNVectorStepper(it: NVectorIterator[Double])
-  extends NVectorStepperBase[Double, DoubleStepper, DoubleNVectorStepper](it) with DoubleStepper {
-  protected[this] def build(it: NVectorIterator[Double]) = new DoubleNVectorStepper(it)
+private class DoubleVectorStepper(it: NewVectorIterator[Double])
+  extends VectorStepperBase[Double, DoubleStepper, DoubleVectorStepper](it) with DoubleStepper {
+  protected[this] def build(it: NewVectorIterator[Double]) = new DoubleVectorStepper(it)
   def nextStep(): Double = it.next()
 }
 
-private[immutable] class IntNVectorStepper(it: NVectorIterator[Int])
-  extends NVectorStepperBase[Int, IntStepper, IntNVectorStepper](it) with IntStepper {
-  protected[this] def build(it: NVectorIterator[Int]) = new IntNVectorStepper(it)
+private class IntVectorStepper(it: NewVectorIterator[Int])
+  extends VectorStepperBase[Int, IntStepper, IntVectorStepper](it) with IntStepper {
+  protected[this] def build(it: NewVectorIterator[Int]) = new IntVectorStepper(it)
   def nextStep(): Int = it.next()
 }
 
-private[immutable] class LongNVectorStepper(it: NVectorIterator[Long])
-  extends NVectorStepperBase[Long, LongStepper, LongNVectorStepper](it) with LongStepper {
-  protected[this] def build(it: NVectorIterator[Long]) = new LongNVectorStepper(it)
+private class LongVectorStepper(it: NewVectorIterator[Long])
+  extends VectorStepperBase[Long, LongStepper, LongVectorStepper](it) with LongStepper {
+  protected[this] def build(it: NewVectorIterator[Long]) = new LongVectorStepper(it)
   def nextStep(): Long = it.next()
 }

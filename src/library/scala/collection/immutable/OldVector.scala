@@ -20,22 +20,22 @@ import scala.collection.mutable.ReusableBuilder
 import scala.runtime.Statics.releaseFence
 
 /** $factoryInfo
-  * @define Coll `Vector`
+  * @define Coll `OldVector`
   * @define coll vector
   */
 @SerialVersionUID(3L)
-object Vector extends StrictOptimizedSeqFactory[Vector] {
+object OldVector extends StrictOptimizedSeqFactory[OldVector] {
 
-  def empty[A]: Vector[A] = NIL
+  def empty[A]: OldVector[A] = NIL
 
-  def from[E](it: collection.IterableOnce[E]): Vector[E] =
+  def from[E](it: collection.IterableOnce[E]): OldVector[E] =
     it match {
       case as: ArraySeq[E] if as.length <= 32 =>
         if (as.isEmpty) NIL
         else {
           val unsafeArray = as.unsafeArray
           val len = unsafeArray.length
-          val v = new Vector(0, len, 0)
+          val v = new OldVector(0, len, 0)
           val display0 = new Array[Any](len)
           if (unsafeArray.isInstanceOf[Array[AnyRef]]) {
             System.arraycopy(unsafeArray, 0, display0, 0, len)
@@ -51,7 +51,7 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
           releaseFence()
           v
         }
-      case v: Vector[E] => v
+      case v: OldVector[E] => v
       case _ =>
         val knownSize = it.knownSize
 
@@ -59,7 +59,7 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
         else if (knownSize > 0 && knownSize <= 32) {
           val display0 = new Array[Any](knownSize)
           it.iterator.copyToArray(display0)
-          val v = new Vector[E](0, knownSize, 0)
+          val v = new OldVector[E](0, knownSize, 0)
           v.depth = 1
           v.display0 = display0.asInstanceOf[Array[AnyRef]]
           releaseFence()
@@ -69,21 +69,21 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
         }
     }
 
-  def newBuilder[A]: ReusableBuilder[A, Vector[A]] = new VectorBuilder[A]
+  def newBuilder[A]: ReusableBuilder[A, OldVector[A]] = new OldVectorBuilder[A]
 
-  /** Creates a Vector of one element. Not safe for publication, the caller is responsible for `releaseFence` */
-  private def single[A](elem: A): Vector[A] = {
-    val s = new Vector[A](0, 1, 0)
+  /** Creates a OldVector of one element. Not safe for publication, the caller is responsible for `releaseFence` */
+  private def single[A](elem: A): OldVector[A] = {
+    val s = new OldVector[A](0, 1, 0)
     s.depth = 1
     s.display0 = Array[AnyRef](elem.asInstanceOf[AnyRef])
     s
   }
 
   @transient
-  private val NIL = new Vector[Nothing](0, 0, 0)
+  private val NIL = new OldVector[Nothing](0, 0, 0)
 
   private val defaultApplyPreferredMaxLength: Int =
-    try System.getProperty("scala.collection.immutable.Vector.defaultApplyPreferredMaxLength",
+    try System.getProperty("scala.collection.immutable.OldVector.defaultApplyPreferredMaxLength",
       "1024").toInt
     catch {
       case _: SecurityException => 1024
@@ -109,23 +109,23 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
  *
  *  @tparam A the element type
  *
- *  @define Coll `Vector`
+ *  @define Coll `OldVector`
  *  @define coll vector
  *  @define orderDependent
  *  @define orderDependentFold
  *  @define mayNotTerminateInf
  *  @define willNotTerminateInf
  */
-final class Vector[+A] private[immutable] (private[collection] val startIndex: Int, private[collection] val endIndex: Int, private[immutable] val focus: Int)
+final class OldVector[+A] private[immutable] (private[collection] val startIndex: Int, private[collection] val endIndex: Int, private[immutable] val focus: Int)
   extends AbstractSeq[A]
     with IndexedSeq[A]
-    with IndexedSeqOps[A, Vector, Vector[A]]
-    with StrictOptimizedSeqOps[A, Vector, Vector[A]]
-    with IterableFactoryDefaults[A, Vector]
+    with IndexedSeqOps[A, OldVector, OldVector[A]]
+    with StrictOptimizedSeqOps[A, OldVector, OldVector[A]]
+    with IterableFactoryDefaults[A, OldVector]
     with VectorPointer[A]
     with DefaultSerializable { self =>
 
-  override def iterableFactory: SeqFactory[Vector] = Vector
+  override def iterableFactory: SeqFactory[OldVector] = OldVector
 
   // Code paths that mutates `dirty` _must_ call `Statics.releaseFence()` before returning from
   // the public method.
@@ -232,42 +232,42 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     }
   }
 
-  override def updated[B >: A](index: Int, elem: B): Vector[B] = updateAt(index, elem)
+  override def updated[B >: A](index: Int, elem: B): OldVector[B] = updateAt(index, elem)
 
-  override def take(n: Int): Vector[A] = {
+  override def take(n: Int): OldVector[A] = {
     if (n <= 0)
-      Vector.empty
+      OldVector.empty
     else if (startIndex < endIndex - n)
       dropBack0(startIndex + n)
     else
       this
   }
 
-  override def drop(n: Int): Vector[A] = {
+  override def drop(n: Int): OldVector[A] = {
     if (n <= 0)
       this
     else if (startIndex < endIndex - n)
       dropFront0(startIndex + n)
     else
-      Vector.empty
+      OldVector.empty
   }
 
-  override def takeRight(n: Int): Vector[A] = {
+  override def takeRight(n: Int): OldVector[A] = {
     if (n <= 0)
-      Vector.empty
+      OldVector.empty
     else if (endIndex - n > startIndex)
       dropFront0(endIndex - n)
     else
       this
   }
 
-  override def dropRight(n: Int): Vector[A] = {
+  override def dropRight(n: Int): OldVector[A] = {
     if (n <= 0)
       this
     else if (endIndex - n > startIndex)
       dropBack0(endIndex - n)
     else
-      Vector.empty
+      OldVector.empty
   }
 
   override def head: A = {
@@ -275,7 +275,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     apply(0)
   }
 
-  override def tail: Vector[A] = {
+  override def tail: OldVector[A] = {
     if (isEmpty) throw new UnsupportedOperationException("empty.tail")
     drop(1)
   }
@@ -285,14 +285,14 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     apply(length - 1)
   }
 
-  override def init: Vector[A] = {
+  override def init: OldVector[A] = {
     if (isEmpty) throw new UnsupportedOperationException("empty.init")
     dropRight(1)
   }
 
   // appendAll (suboptimal but avoids worst performance gotchas)
-  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): Vector[B] = {
-    import Vector.{Log2ConcatFaster, TinyAppendFaster}
+  override def appendedAll[B >: A](suffix: collection.IterableOnce[B]): OldVector[B] = {
+    import OldVector.{Log2ConcatFaster, TinyAppendFaster}
     if (suffix.iterator.isEmpty) this
     else {
       suffix match {
@@ -300,11 +300,11 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
           suffix.size match {
             // Often it's better to append small numbers of elements (or prepend if RHS is a vector)
             case n if n <= TinyAppendFaster || n < (this.size >>> Log2ConcatFaster) =>
-              var v: Vector[B] = this
+              var v: OldVector[B] = this
               for (x <- suffix) v = v :+ x
               v
-            case n if this.size < (n >>> Log2ConcatFaster) && suffix.isInstanceOf[Vector[_]] =>
-              var v = suffix.asInstanceOf[Vector[B]]
+            case n if this.size < (n >>> Log2ConcatFaster) && suffix.isInstanceOf[OldVector[_]] =>
+              var v = suffix.asInstanceOf[OldVector[B]]
               val ri = this.reverseIterator
               while (ri.hasNext) v = ri.next() +: v
               v
@@ -315,22 +315,22 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     }
   }
 
-  override def prependedAll[B >: A](prefix: collection.IterableOnce[B]): Vector[B] = {
+  override def prependedAll[B >: A](prefix: collection.IterableOnce[B]): OldVector[B] = {
     // Implementation similar to `appendAll`: when of the collections to concatenate (either `this` or `prefix`)
     // has a small number of elements compared to the other, then we add them using `:+` or `+:` in a loop
-    import Vector.{Log2ConcatFaster, TinyAppendFaster}
+    import OldVector.{Log2ConcatFaster, TinyAppendFaster}
     if (prefix.iterator.isEmpty) this
     else {
       prefix match {
         case prefix: collection.Iterable[B] =>
           prefix.size match {
             case n if n <= TinyAppendFaster || n < (this.size >>> Log2ConcatFaster) =>
-              var v: Vector[B] = this
+              var v: OldVector[B] = this
               val it = prefix.toIndexedSeq.reverseIterator
               while (it.hasNext) v = it.next() +: v
               v
-            case n if this.size < (n >>> Log2ConcatFaster) && prefix.isInstanceOf[Vector[_]] =>
-              var v = prefix.asInstanceOf[Vector[B]]
+            case n if this.size < (n >>> Log2ConcatFaster) && prefix.isInstanceOf[OldVector[_]] =>
+              var v = prefix.asInstanceOf[OldVector[B]]
               val it = this.iterator
               while (it.hasNext) v = v :+ it.next()
               v
@@ -344,9 +344,9 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
 
   // semi-private api
 
-  private[immutable] def updateAt[B >: A](index: Int, elem: B): Vector[B] = {
+  private[immutable] def updateAt[B >: A](index: Int, elem: B): OldVector[B] = {
     val idx = checkRangeConvert(index)
-    val s = new Vector[B](startIndex, endIndex, idx)
+    val s = new OldVector[B](startIndex, endIndex, idx)
     s.initFrom(this)
     s.dirty = dirty
     s.gotoPosWritable(focus, idx, focus ^ idx)  // if dirty commit changes; go to new pos and prepare for writing
@@ -369,11 +369,11 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     dirty = true
   }
 
-  override def prepended[B >: A](value: B): Vector[B] = {
+  override def prepended[B >: A](value: B): OldVector[B] = {
     val thisLength = length
     val result =
       if (depth == 1 && thisLength < 32) {
-        val s = new Vector(0, thisLength + 1, 0)
+        val s = new OldVector(0, thisLength + 1, 0)
         s.depth = 1
         val newDisplay0 = new Array[AnyRef](thisLength + 1)
         System.arraycopy(display0, startIndex, newDisplay0, 1, thisLength)
@@ -385,7 +385,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
         val lo = (startIndex - 1) & 31
 
         if (startIndex != blockIndex + 32) {
-          val s = new Vector(startIndex - 1, endIndex, blockIndex)
+          val s = new OldVector(startIndex - 1, endIndex, blockIndex)
           s.initFrom(this)
           s.dirty = dirty
           s.gotoPosWritable(focus, blockIndex, focus ^ blockIndex)
@@ -403,7 +403,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
               val newBlockIndex = blockIndex + shift
               val newFocus = focus + shift
 
-              val s = new Vector(startIndex - 1 + shift, endIndex + shift, newBlockIndex)
+              val s = new OldVector(startIndex - 1 + shift, endIndex + shift, newBlockIndex)
               s.initFrom(this)
               s.dirty = dirty
               s.shiftTopLevel(0, shiftBlocks) // shift right by n blocks
@@ -414,7 +414,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
               val newBlockIndex = blockIndex + 32
               val newFocus = focus
 
-              val s = new Vector(startIndex - 1 + shift, endIndex + shift, newBlockIndex)
+              val s = new OldVector(startIndex - 1 + shift, endIndex + shift, newBlockIndex)
               s.initFrom(this)
               s.dirty = dirty
               s.shiftTopLevel(0, shiftBlocks) // shift right by n elements
@@ -428,7 +428,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
             val newBlockIndex = blockIndex + move
             val newFocus = focus + move
 
-            val s = new Vector(startIndex - 1 + move, endIndex + move, newBlockIndex)
+            val s = new OldVector(startIndex - 1 + move, endIndex + move, newBlockIndex)
             s.initFrom(this)
             s.dirty = dirty
             s.gotoFreshPosWritable(newFocus, newBlockIndex, newFocus ^ newBlockIndex) // could optimize: we know it will create a whole branch
@@ -438,7 +438,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
             val newBlockIndex = blockIndex
             val newFocus = focus
 
-            val s = new Vector(startIndex - 1, endIndex, newBlockIndex)
+            val s = new OldVector(startIndex - 1, endIndex, newBlockIndex)
             s.initFrom(this)
             s.dirty = dirty
             s.gotoFreshPosWritable(newFocus, newBlockIndex, newFocus ^ newBlockIndex)
@@ -446,17 +446,17 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
             s
           }
         }
-      } else Vector.single(value)
+      } else OldVector.single(value)
 
     releaseFence()
     result
   }
 
-  override def appended[B >: A](value: B): Vector[B] = {
+  override def appended[B >: A](value: B): OldVector[B] = {
     val thisLength = length
     val result =
       if (depth == 1 && thisLength < 32) {
-        val s = new Vector(0, thisLength + 1, 0)
+        val s = new OldVector(0, thisLength + 1, 0)
         s.depth = 1
         val newDisplay0 = new Array[AnyRef](thisLength + 1)
         System.arraycopy(display0, startIndex, newDisplay0, 0, thisLength)
@@ -468,7 +468,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
         val lo = endIndex & 31 // remainder of blockIndex / 32
 
         if (endIndex != blockIndex) {
-          val s = new Vector(startIndex, endIndex + 1, blockIndex)
+          val s = new OldVector(startIndex, endIndex + 1, blockIndex)
           s.initFrom(this)
           s.dirty = dirty
           s.gotoPosWritable(focus, blockIndex, focus ^ blockIndex)
@@ -483,7 +483,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
               val newBlockIndex = blockIndex - shift
               val newFocus = focus - shift
 
-              val s = new Vector(startIndex - shift, endIndex + 1 - shift, newBlockIndex)
+              val s = new OldVector(startIndex - shift, endIndex + 1 - shift, newBlockIndex)
               s.initFrom(this)
               s.dirty = dirty
               s.shiftTopLevel(shiftBlocks, 0) // shift left by n blocks
@@ -494,7 +494,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
               val newBlockIndex = blockIndex - 32
               val newFocus = focus
 
-              val s = new Vector(startIndex - shift, endIndex + 1 - shift, newBlockIndex)
+              val s = new OldVector(startIndex - shift, endIndex + 1 - shift, newBlockIndex)
               s.initFrom(this)
               s.dirty = dirty
               s.shiftTopLevel(shiftBlocks, 0) // shift right by n elements
@@ -512,7 +512,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
             val newBlockIndex = blockIndex
             val newFocus = focus
 
-            val s = new Vector(startIndex, endIndex + 1, newBlockIndex)
+            val s = new OldVector(startIndex, endIndex + 1, newBlockIndex)
             s.initFrom(this)
             s.dirty = dirty
             s.gotoFreshPosWritable(newFocus, newBlockIndex, newFocus ^ newBlockIndex)
@@ -520,7 +520,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
             s
           }
         }
-      } else Vector.single(value)
+      } else OldVector.single(value)
 
     releaseFence()
     result
@@ -646,7 +646,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     else throw new IllegalArgumentException()
   }
 
-  private def dropFront0(cutIndex: Int): Vector[A] = {
+  private def dropFront0(cutIndex: Int): OldVector[A] = {
     val blockIndex = cutIndex & ~31
     val xor = cutIndex ^ (endIndex - 1)
     val d = requiredDepth(xor)
@@ -654,7 +654,7 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
 
     // need to init with full display iff going to cutIndex requires swapping block at level >= d
 
-    val s = new Vector(cutIndex - shift, endIndex - shift, blockIndex - shift)
+    val s = new OldVector(cutIndex - shift, endIndex - shift, blockIndex - shift)
     s.initFrom(this)
     s.dirty = dirty
     s.gotoPosWritable(focus, blockIndex, focus ^ blockIndex)
@@ -664,13 +664,13 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     s
   }
 
-  private def dropBack0(cutIndex: Int): Vector[A] = {
+  private def dropBack0(cutIndex: Int): OldVector[A] = {
     val blockIndex = (cutIndex - 1) & ~31
     val xor = startIndex ^ (cutIndex - 1)
     val d = requiredDepth(xor)
     val shift = startIndex & ~((1 << (5 * d)) - 1)
 
-    val s = new Vector(startIndex - shift, cutIndex - shift, blockIndex - shift)
+    val s = new OldVector(startIndex - shift, cutIndex - shift, blockIndex - shift)
     s.initFrom(this)
     s.dirty = dirty
     s.gotoPosWritable(focus, blockIndex, focus ^ blockIndex)
@@ -679,10 +679,10 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
     releaseFence()
     s
   }
-  override protected def applyPreferredMaxLength: Int = Vector.defaultApplyPreferredMaxLength
+  override protected def applyPreferredMaxLength: Int = OldVector.defaultApplyPreferredMaxLength
 
   override def equals(o: Any): Boolean = o match {
-    case that: Vector[_] =>
+    case that: OldVector[_] =>
       if (this eq that) true
       else if (this.length != that.length) false
       else if ( //
@@ -701,9 +701,9 @@ final class Vector[+A] private[immutable] (private[collection] val startIndex: I
 
   override def copyToArray[B >: A](xs: Array[B], start: Int, len: Int): Int = iterator.copyToArray(xs, start, len)
 
-  override def toVector: Vector[A] = this
+  //override def toVector: Vector[A] = this
 
-  override protected[this] def className = "Vector"
+  override protected[this] def className = "OldVector"
 }
 
 //TODO: When making this class private, make it final as well.
@@ -811,18 +811,18 @@ class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int)
   /** Creates a new vector which consists of elements remaining in this iterator.
    *  Such a vector can then be split into several vectors using methods like `take` and `drop`.
    */
-  private[collection] def remainingVector: Vector[A] = {
-    if(!_hasNext) Vector.empty
+  private[collection] def remainingVector: OldVector[A] = {
+    if(!_hasNext) OldVector.empty
     else {
-      val v = new Vector(blockIndex + lo, endIndex, blockIndex + lo)
+      val v = new OldVector(blockIndex + lo, endIndex, blockIndex + lo)
       v.initFrom(this)
       v
     }
   }
 }
 
-/** A class to build instances of `Vector`.  This builder is reusable. */
-final class VectorBuilder[A]() extends ReusableBuilder[A, Vector[A]] with VectorPointer[A] {
+/** A class to build instances of `OldVector`.  This builder is reusable. */
+final class OldVectorBuilder[A]() extends ReusableBuilder[A, OldVector[A]] with VectorPointer[A] {
 
   // possible alternative: start with display0 = null, blockIndex = -32, lo = 32
   // to avoid allocating initial array if the result will be empty anyways
@@ -864,11 +864,11 @@ final class VectorBuilder[A]() extends ReusableBuilder[A, Vector[A]] with Vector
     this
   }
 
-  def result(): Vector[A] = {
+  def result(): OldVector[A] = {
     val size = this.size
     if (size == 0)
-      return Vector.empty
-    val s = new Vector[A](0, size, 0) // should focus front or back?
+      return OldVector.empty
+    val s = new OldVector[A](0, size, 0) // should focus front or back?
     s.initFrom(this)
     if (depth > 1) s.gotoPos(0, size - 1) // we're currently focused to size - 1, not size!
     releaseFence()

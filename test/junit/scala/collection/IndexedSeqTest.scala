@@ -584,11 +584,11 @@ package IndexedTestImpl {
     }
   }
 
-  import scala.collection.immutable.NVector
-  class NVectorTest extends ImmutableIndexedSeqTest[NVector[String], String]  with StringTestData {
+  import scala.collection.immutable.OldVector
+  class OldVectorTest extends ImmutableIndexedSeqTest[OldVector[String], String]  with StringTestData {
 
-    override protected def underTest(size: Int): NVector[String] = {
-      val res = NVector.newBuilder[String]
+    override protected def underTest(size: Int): OldVector[String] = {
+      val res = OldVector.newBuilder[String]
       for (i <- 0 until size)
         res += expectedValueAtIndex(i)
       res.result()

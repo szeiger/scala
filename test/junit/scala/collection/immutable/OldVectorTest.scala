@@ -9,31 +9,31 @@ import scala.collection.mutable.ListBuffer
 import scala.reflect.{ClassTag, classTag}
 
 @RunWith(classOf[JUnit4])
-class VectorTest {
+class OldVectorTest {
 
   @Test
   def hasCorrectDropAndTakeMethods(): Unit = {
-    val v = Vector(0) ++ Vector(1 to 64: _*)
+    val v = OldVector(0) ++ OldVector(1 to 64: _*)
 
-    assertEquals(Vector(0, 1), v take 2)
-    assertEquals(Vector(63, 64), v takeRight 2)
-    assertEquals(Vector(2 to 64: _*), v drop 2)
-    assertEquals(Vector(0 to 62: _*), v dropRight 2)
+    assertEquals(OldVector(0, 1), v take 2)
+    assertEquals(OldVector(63, 64), v takeRight 2)
+    assertEquals(OldVector(2 to 64: _*), v drop 2)
+    assertEquals(OldVector(0 to 62: _*), v dropRight 2)
 
     assertEquals(v, v take Int.MaxValue)
     assertEquals(v, v takeRight Int.MaxValue)
-    assertEquals(Vector.empty[Int], v drop Int.MaxValue)
-    assertEquals(Vector.empty[Int], v dropRight Int.MaxValue)
+    assertEquals(OldVector.empty[Int], v drop Int.MaxValue)
+    assertEquals(OldVector.empty[Int], v dropRight Int.MaxValue)
 
-    assertEquals(Vector.empty[Int], v take Int.MinValue)
-    assertEquals(Vector.empty[Int], v takeRight Int.MinValue)
+    assertEquals(OldVector.empty[Int], v take Int.MinValue)
+    assertEquals(OldVector.empty[Int], v takeRight Int.MinValue)
     assertEquals(v, v drop Int.MinValue)
     assertEquals(v, v dropRight Int.MinValue)
   }
 
   @Test
   def hasCorrectPrependedAll(): Unit = {
-    val els = Vector(1 to 1000: _*)
+    val els = OldVector(1 to 1000: _*)
 
     for (i <- 0 until els.size) {
       val (prefix, suffix) = els.splitAt(i)
@@ -45,42 +45,42 @@ class VectorTest {
 
   @Test
   def factoryReuse(): Unit = {
-    assertSame(Vector.empty, Vector.empty)
-    assertSame(Vector.empty, Vector())
-    val m = Vector("a")
-    assertSame(m, Vector.from(m))
-    assertSame(m, Vector.apply(m: _*))
+    assertSame(OldVector.empty, OldVector.empty)
+    assertSame(OldVector.empty, OldVector())
+    val m = OldVector("a")
+    assertSame(m, OldVector.from(m))
+    assertSame(m, OldVector.apply(m: _*))
   }
 
-  @Test def checkSearch: Unit = SeqTests.checkSearch(Vector(0 to 1000: _*), 15,  implicitly[Ordering[Int]])
+  @Test def checkSearch: Unit = SeqTests.checkSearch(OldVector(0 to 1000: _*), 15,  implicitly[Ordering[Int]])
 
   @Test
   def emptyIteratorReuse(): Unit = {
-    assertSame(Vector.empty.iterator, Vector.empty.iterator)
-    assertSame(Vector.empty.iterator, Vector(1).drop(1).iterator)
+    assertSame(OldVector.empty.iterator, OldVector.empty.iterator)
+    assertSame(OldVector.empty.iterator, OldVector(1).drop(1).iterator)
   }
 
   @Test
   def t11122_prependedAll_Iterator(): Unit = {
     val i = Iterator.from(1).take(3)
-    assertEquals(Vector(1, 2, 3, 0), Vector(0).prependedAll(i))
+    assertEquals(OldVector(1, 2, 3, 0), OldVector(0).prependedAll(i))
   }
 
   @Test
   def concat: Unit = {
-    assertEquals((1 to 100).toVector, (1 to 7).toVector concat (8 to 100).toVector)
+    assertEquals((1 to 100).to(OldVector), (1 to 7).to(OldVector) concat (8 to 100).to(OldVector))
   }
 
   @Test
   def copyToArray: Unit = {
     val array = Array.fill(100)(2)
-    Vector.fill(100)(1).copyToArray(array, 0, 100)
+    OldVector.fill(100)(1).copyToArray(array, 0, 100)
     assertEquals(array.toSeq, Seq.fill(100)(1))
   }
 
   @Test
   def vectorIteratorDrop(): Unit = {
-    val underlying = Vector(0 to 10010: _*)
+    val underlying = OldVector(0 to 10010: _*)
 
     val totalSize = underlying.size
 
@@ -103,7 +103,7 @@ class VectorTest {
   }
   @Test
   def vectorIteratorDropToEnd(): Unit = {
-    val underlying = Vector(0)
+    val underlying = OldVector(0)
 
     for (start <- List(1,2,3,4,99)) {
       {
@@ -131,7 +131,7 @@ class VectorTest {
   }
   @Test
   def vectorIteratorRepeated(): Unit = {
-    val underlying = Vector(1 to 10001: _*)
+    val underlying = OldVector(1 to 10001: _*)
 
 
     for (stepSize <- List(0, 1, 2, 3, 4, 8, 10, 24, 32, 63, 64, 100)) {
@@ -147,7 +147,7 @@ class VectorTest {
   @Test
   def vectorFill(): Unit = {
     var i = 0
-    val test = Vector.fill(10){
+    val test = OldVector.fill(10){
       i += 1
       i * 10
     }
@@ -169,23 +169,23 @@ class VectorTest {
     val lb = ListBuffer[Int]()
 
     val v =
-      Vector(1,2,3)
+      OldVector(1,2,3)
       .tapEach(lb += _)
       .tapEach(lb += _)
 
     assertEquals(ListBuffer(1,2,3,1,2,3), lb)
-    assertEquals(Vector(1,2,3), v)
+    assertEquals(OldVector(1,2,3), v)
 
 
     val f: Any => Unit = println
 
     // test that type info is not lost
-    val x: Vector[Char] = Vector[Char]().tapEach(f)
+    val x: OldVector[Char] = OldVector[Char]().tapEach(f)
   }
 
   @Test
   def vectorIteratorTake(): Unit = {
-    val v = Vector.from(0 to 50)
+    val v = OldVector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 6
@@ -197,7 +197,7 @@ class VectorTest {
 
   @Test
   def vectorIteratorDrop2(): Unit = {
-    val v = Vector.from(0 to 50)
+    val v = OldVector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 60
@@ -209,7 +209,7 @@ class VectorTest {
 
   @Test
   def vectorIteratorSlice(): Unit = {
-    val v = Vector.from(0 to 50)
+    val v = OldVector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 60
@@ -231,14 +231,14 @@ class VectorTest {
 
       locally {
         val arraySeq = ArraySeq(d1)
-        val vector = Vector(arraySeq: _*)
+        val vector = OldVector(arraySeq: _*)
         assertEquals(arraySeq, ArraySeq(d1)) // ensure arraySeq is not mutated
-        assertEquals(vector.updated(0, d2), Vector(d2))
+        assertEquals(vector.updated(0, d2), OldVector(d2))
       }
 
       locally {
         val list = List(d1)
-        val vector = Vector.from(list)
+        val vector = OldVector.from(list)
         assertEquals(list, vector)
         assertEquals(List(d2), vector.updated(0, d2))
       }
@@ -247,17 +247,17 @@ class VectorTest {
     locally {
       // ensure boxing logic works:
       val arraySeq = ArraySeq(1,2,3,4,5)
-      val vector = Vector(arraySeq: _*)
+      val vector = OldVector(arraySeq: _*)
 
       assertEquals(1 to 5, vector)
-      assertEquals(vector.updated(0, 20), Vector(20,2,3,4,5))
-      assertEquals(vector.updated(0, ""), Vector("",2,3,4,5))
+      assertEquals(vector.updated(0, 20), OldVector(20,2,3,4,5))
+      assertEquals(vector.updated(0, ""), OldVector("",2,3,4,5))
       assertEquals(1 to 5, arraySeq) // ensure arraySeq is not mutated
     }
     locally {
       // ensure boxing logic works:
       val arr = Array(1)
-      val vector = Vector.from(arr)
+      val vector = OldVector.from(arr)
       assertEquals(arr.toList, vector)
       assertEquals(List(20), vector.updated(0, 20))
       assertEquals(List(""), vector.updated(0, ""))
@@ -265,22 +265,22 @@ class VectorTest {
   }
 
   def t11636(): Unit = {
-    val a: Vector[String] = "O" +: Iterator.continually("E").take(2101).foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val a: OldVector[String] = "O" +: Iterator.continually("E").take(2101).foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val a0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(2101) ++ ArraySeq("C")
 
-    val b: Vector[String] = "O" +: Iterator.continually("E").take(223) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val b: OldVector[String] = "O" +: Iterator.continually("E").take(223) .foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val b0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(223) ++ ArraySeq("C")
 
-    val c: Vector[String] = "O" +: Iterator.continually("E").take(135) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val c: OldVector[String] = "O" +: Iterator.continually("E").take(135) .foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val c0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(135) ++ ArraySeq("C")
 
-    val d: Vector[String] = "O" +: Iterator.continually("E").take(0)   .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val d: OldVector[String] = "O" +: Iterator.continually("E").take(0)   .foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val d0: ArraySeq[String] = ArraySeq("O", "C")
 
-    val e: Vector[String] = "O" +: Iterator.continually("E").take(376) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val e: OldVector[String] = "O" +: Iterator.continually("E").take(376) .foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val e0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(376) ++ ArraySeq("C")
 
-    val f: Vector[String] = "O" +: Iterator.continually("E").take(365) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
+    val f: OldVector[String] = "O" +: Iterator.continually("E").take(365) .foldLeft(OldVector.empty[String])((v, e) => v :+ e) :+ "C"
     val f0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(365) ++ ArraySeq("C")
 
     assertEquals(a0 ++ b0, a ++ b)

@@ -15,9 +15,9 @@ class IndexedSeqTest extends AllocationTest {
     assertTrue(Vector(1, 2, 3) == Vector(1, 2, 3))
     assertTrue(Vector(1, 2, 3, 4, 5, 6, 7, 8, 9) == Vector(1, 2, 3, 4, 5, 6, 7, 8, 9))
 
-    assertTrue(NVector.empty == NVector.empty)
-    assertTrue(NVector(1, 2, 3) == NVector(1, 2, 3))
-    assertTrue(NVector(1, 2, 3, 4, 5, 6, 7, 8, 9) == NVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
+    assertTrue(OldVector.empty == OldVector.empty)
+    assertTrue(OldVector(1, 2, 3) == OldVector(1, 2, 3))
+    assertTrue(OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9) == OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
 
     assertTrue(ArraySeq.empty == ArraySeq.empty)
     assertTrue(ArraySeq(1, 2, 3) == ArraySeq(1, 2, 3))
@@ -31,11 +31,11 @@ class IndexedSeqTest extends AllocationTest {
     assertTrue(Vector(1, 2) != Vector(1, 2, 3))
     assertTrue(Vector(1, 2, 3, 4, 5, 6, 7, 8, 9) != Vector(1, 2, 3, 4, 5, 6, 7, 8, 99))
 
-    assertTrue(NVector.empty != NVector(1, 2, 3))
-    assertTrue(NVector(3, 2, 1) != NVector(1, 2, 3))
-    assertTrue(NVector(1, 2, 3) != NVector(1, 2))
-    assertTrue(NVector(1, 2) != NVector(1, 2, 3))
-    assertTrue(NVector(1, 2, 3, 4, 5, 6, 7, 8, 9) != NVector(1, 2, 3, 4, 5, 6, 7, 8, 99))
+    assertTrue(OldVector.empty != OldVector(1, 2, 3))
+    assertTrue(OldVector(3, 2, 1) != OldVector(1, 2, 3))
+    assertTrue(OldVector(1, 2, 3) != OldVector(1, 2))
+    assertTrue(OldVector(1, 2) != OldVector(1, 2, 3))
+    assertTrue(OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9) != OldVector(1, 2, 3, 4, 5, 6, 7, 8, 99))
   }
 
   @Test def testNotEqualsSimple2: Unit = {
@@ -71,8 +71,8 @@ class IndexedSeqTest extends AllocationTest {
     nonAllocatingEqual(true, ArraySeq.empty, ArraySeq.empty)
     nonAllocatingEqual(true, Vector.empty, ArraySeq.empty)
 
-    nonAllocatingEqual(true, NVector.empty, NVector.empty)
-    nonAllocatingEqual(true, NVector.empty, ArraySeq.empty)
+    nonAllocatingEqual(true, OldVector.empty, OldVector.empty)
+    nonAllocatingEqual(true, OldVector.empty, ArraySeq.empty)
   }
 
   @Test def testEqualsSimpleNonAllocatingSmall: Unit = {
@@ -80,8 +80,8 @@ class IndexedSeqTest extends AllocationTest {
     nonAllocatingEqual(true, ArraySeq(1, 2, 3), ArraySeq(1, 2, 3))
     nonAllocatingEqual(true, Vector(1, 2, 3), ArraySeq(1, 2, 3))
 
-    nonAllocatingEqual(true, NVector(1, 2, 3), NVector(1, 2, 3))
-    nonAllocatingEqual(true, NVector(1, 2, 3), ArraySeq(1, 2, 3))
+    nonAllocatingEqual(true, OldVector(1, 2, 3), OldVector(1, 2, 3))
+    nonAllocatingEqual(true, OldVector(1, 2, 3), ArraySeq(1, 2, 3))
   }
 
   @Test def testEqualsSimpleNonAllocatingDiffSize: Unit = {
@@ -89,8 +89,8 @@ class IndexedSeqTest extends AllocationTest {
     nonAllocatingEqual(false, ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
     nonAllocatingEqual(false, Vector(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
 
-    nonAllocatingEqual(false, NVector(1, 2, 3, 4, 5, 6, 7, 8, 9), NVector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-    nonAllocatingEqual(false, NVector(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+    nonAllocatingEqual(false, OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9), OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
+    nonAllocatingEqual(false, OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
   }
 
   @Test def testEqualsSimpleNonAllocatingDiffInFirstFew: Unit = {
@@ -98,8 +98,8 @@ class IndexedSeqTest extends AllocationTest {
     nonAllocatingEqual(false, ArraySeq(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
     nonAllocatingEqual(false, Vector(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
 
-    nonAllocatingEqual(false, NVector(1, 2, 3, 14, 5, 6, 7, 8, 9), NVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
-    nonAllocatingEqual(false, NVector(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
+    nonAllocatingEqual(false, OldVector(1, 2, 3, 14, 5, 6, 7, 8, 9), OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
+    nonAllocatingEqual(false, OldVector(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
   }
 
   @Test def testEqualsArraySeqSpecialised1: Unit = {

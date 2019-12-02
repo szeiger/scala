@@ -21,32 +21,32 @@ import scala.collection.mutable.{ListBuffer, StringBuilder}
 import scala.reflect.{ClassTag, classTag}
 
 @RunWith(classOf[JUnit4])
-class NVectorTest {
-  import NVectorUtils.validateDebug
+class VectorTest {
+  import VectorUtils.validateDebug
 
   @Test
   def hasCorrectDropAndTakeMethods(): Unit = {
-    val v = NVector(0) ++ NVector(1 to 64: _*)
+    val v = Vector(0) ++ Vector(1 to 64: _*)
 
-    assertEquals(NVector(0, 1), v take 2)
-    assertEquals(NVector(63, 64), v takeRight 2)
-    assertEquals(NVector(2 to 64: _*), v drop 2)
-    assertEquals(NVector(0 to 62: _*), v dropRight 2)
+    assertEquals(Vector(0, 1), v take 2)
+    assertEquals(Vector(63, 64), v takeRight 2)
+    assertEquals(Vector(2 to 64: _*), v drop 2)
+    assertEquals(Vector(0 to 62: _*), v dropRight 2)
 
     assertEquals(v, v take Int.MaxValue)
     assertEquals(v, v takeRight Int.MaxValue)
-    assertEquals(NVector.empty[Int], v drop Int.MaxValue)
-    assertEquals(NVector.empty[Int], v dropRight Int.MaxValue)
+    assertEquals(Vector.empty[Int], v drop Int.MaxValue)
+    assertEquals(Vector.empty[Int], v dropRight Int.MaxValue)
 
-    assertEquals(NVector.empty[Int], v take Int.MinValue)
-    assertEquals(NVector.empty[Int], v takeRight Int.MinValue)
+    assertEquals(Vector.empty[Int], v take Int.MinValue)
+    assertEquals(Vector.empty[Int], v takeRight Int.MinValue)
     assertEquals(v, v drop Int.MinValue)
     assertEquals(v, v dropRight Int.MinValue)
   }
 
   @Test
   def hasCorrectPrependedAll(): Unit = {
-    val els = NVector(1 to 1000: _*)
+    val els = Vector(1 to 1000: _*)
 
     for (i <- 0 until els.size) {
       val (prefix, suffix) = els.splitAt(i)
@@ -60,42 +60,42 @@ class NVectorTest {
 
   @Test
   def factoryReuse(): Unit = {
-    assertSame(NVector.empty, NVector.empty)
-    assertSame(NVector.empty, NVector())
-    val m = NVector("a")
-    assertSame(m, NVector.from(m))
-    assertSame(m, NVector.apply(m: _*))
+    assertSame(Vector.empty, Vector.empty)
+    assertSame(Vector.empty, Vector())
+    val m = Vector("a")
+    assertSame(m, Vector.from(m))
+    assertSame(m, Vector.apply(m: _*))
   }
 
-  @Test def checkSearch: Unit = SeqTests.checkSearch(NVector(0 to 1000: _*), 15,  implicitly[Ordering[Int]])
+  @Test def checkSearch: Unit = SeqTests.checkSearch(Vector(0 to 1000: _*), 15,  implicitly[Ordering[Int]])
 
   @Test
   def emptyIteratorReuse(): Unit = {
-    assertSame(NVector.empty.iterator, NVector.empty.iterator)
-    assertSame(NVector.empty.iterator, NVector(1).drop(1).iterator)
+    assertSame(Vector.empty.iterator, Vector.empty.iterator)
+    assertSame(Vector.empty.iterator, Vector(1).drop(1).iterator)
   }
 
   @Test
   def t11122_prependedAll_Iterator(): Unit = {
     val i = Iterator.from(1).take(3)
-    assertEquals(NVector(1, 2, 3, 0), NVector(0).prependedAll(i))
+    assertEquals(Vector(1, 2, 3, 0), Vector(0).prependedAll(i))
   }
 
   @Test
   def concat: Unit = {
-    assertEquals(NVector.from(1 to 100), NVector.from(1 to 7) concat NVector.from(8 to 100))
+    assertEquals(Vector.from(1 to 100), Vector.from(1 to 7) concat Vector.from(8 to 100))
   }
 
   @Test
   def copyToArray: Unit = {
     val array = Array.fill(100)(2)
-    NVector.fill(100)(1).copyToArray(array, 0, 100)
+    Vector.fill(100)(1).copyToArray(array, 0, 100)
     assertEquals(array.toSeq, Seq.fill(100)(1))
   }
 
   @Test
   def vectorIteratorDrop(): Unit = {
-    val underlying = NVector(0 to 10010: _*)
+    val underlying = Vector(0 to 10010: _*)
 
     val totalSize = underlying.size
 
@@ -118,7 +118,7 @@ class NVectorTest {
   }
   @Test
   def vectorIteratorDropToEnd(): Unit = {
-    val underlying = NVector(0)
+    val underlying = Vector(0)
 
     for (start <- List(1,2,3,4,99)) {
       {
@@ -146,7 +146,7 @@ class NVectorTest {
   }
   @Test
   def vectorIteratorRepeated(): Unit = {
-    val underlying = NVector(1 to 10001: _*)
+    val underlying = Vector(1 to 10001: _*)
 
 
     for (stepSize <- List(0, 1, 2, 3, 4, 8, 10, 24, 32, 63, 64, 100)) {
@@ -162,7 +162,7 @@ class NVectorTest {
   @Test
   def vectorFill(): Unit = {
     var i = 0
-    val test = NVector.fill(10){
+    val test = Vector.fill(10){
       i += 1
       i * 10
     }
@@ -184,23 +184,23 @@ class NVectorTest {
     val lb = ListBuffer[Int]()
 
     val v =
-      NVector(1,2,3)
+      Vector(1,2,3)
       .tapEach(lb += _)
       .tapEach(lb += _)
 
     assertEquals(ListBuffer(1,2,3,1,2,3), lb)
-    assertEquals(NVector(1,2,3), v)
+    assertEquals(Vector(1,2,3), v)
 
 
     val f: Any => Unit = println
 
     // test that type info is not lost
-    val x: NVector[Char] = NVector[Char]().tapEach(f)
+    val x: Vector[Char] = Vector[Char]().tapEach(f)
   }
 
   @Test
   def vectorIteratorTake(): Unit = {
-    val v = NVector.from(0 to 50)
+    val v = Vector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 6
@@ -212,7 +212,7 @@ class NVectorTest {
 
   @Test
   def vectorIteratorDrop2(): Unit = {
-    val v = NVector.from(0 to 50)
+    val v = Vector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 60
@@ -224,7 +224,7 @@ class NVectorTest {
 
   @Test
   def vectorIteratorSlice(): Unit = {
-    val v = NVector.from(0 to 50)
+    val v = Vector.from(0 to 50)
     for {
       i <- -100 to 4000 by 40
       j <- -100 to 4000 by 60
@@ -246,14 +246,14 @@ class NVectorTest {
 
       locally {
         val arraySeq = ArraySeq(d1)
-        val vector = NVector(arraySeq: _*)
+        val vector = Vector(arraySeq: _*)
         assertEquals(arraySeq, ArraySeq(d1)) // ensure arraySeq is not mutated
-        assertEquals(vector.updated(0, d2), NVector(d2))
+        assertEquals(vector.updated(0, d2), Vector(d2))
       }
 
       locally {
         val list = List(d1)
-        val vector = NVector.from(list)
+        val vector = Vector.from(list)
         assertEquals(list, vector)
         assertEquals(List(d2), vector.updated(0, d2))
       }
@@ -262,17 +262,17 @@ class NVectorTest {
     locally {
       // ensure boxing logic works:
       val arraySeq = ArraySeq(1,2,3,4,5)
-      val vector = NVector(arraySeq: _*)
+      val vector = Vector(arraySeq: _*)
 
       assertEquals(1 to 5, vector)
-      assertEquals(vector.updated(0, 20), NVector(20,2,3,4,5))
-      assertEquals(vector.updated(0, ""), NVector("",2,3,4,5))
+      assertEquals(vector.updated(0, 20), Vector(20,2,3,4,5))
+      assertEquals(vector.updated(0, ""), Vector("",2,3,4,5))
       assertEquals(1 to 5, arraySeq) // ensure arraySeq is not mutated
     }
     locally {
       // ensure boxing logic works:
       val arr = Array(1)
-      val vector = NVector.from(arr)
+      val vector = Vector.from(arr)
       assertEquals(arr.toList, vector)
       assertEquals(List(20), vector.updated(0, 20))
       assertEquals(List(""), vector.updated(0, ""))
@@ -280,22 +280,22 @@ class NVectorTest {
   }
 
   def t11636(): Unit = {
-    val a: NVector[String] = "O" +: Iterator.continually("E").take(2101).foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val a: Vector[String] = "O" +: Iterator.continually("E").take(2101).foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val a0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(2101) ++ ArraySeq("C")
 
-    val b: NVector[String] = "O" +: Iterator.continually("E").take(223) .foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val b: Vector[String] = "O" +: Iterator.continually("E").take(223) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val b0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(223) ++ ArraySeq("C")
 
-    val c: NVector[String] = "O" +: Iterator.continually("E").take(135) .foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val c: Vector[String] = "O" +: Iterator.continually("E").take(135) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val c0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(135) ++ ArraySeq("C")
 
-    val d: NVector[String] = "O" +: Iterator.continually("E").take(0)   .foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val d: Vector[String] = "O" +: Iterator.continually("E").take(0)   .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val d0: ArraySeq[String] = ArraySeq("O", "C")
 
-    val e: NVector[String] = "O" +: Iterator.continually("E").take(376) .foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val e: Vector[String] = "O" +: Iterator.continually("E").take(376) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val e0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(376) ++ ArraySeq("C")
 
-    val f: NVector[String] = "O" +: Iterator.continually("E").take(365) .foldLeft(NVector.empty[String])((v, e) => v :+ e) :+ "C"
+    val f: Vector[String] = "O" +: Iterator.continually("E").take(365) .foldLeft(Vector.empty[String])((v, e) => v :+ e) :+ "C"
     val f0: ArraySeq[String] = ArraySeq("O") ++ Iterator.continually("E").take(365) ++ ArraySeq("C")
 
     assertEquals(a0 ++ b0, a ++ b)
@@ -305,10 +305,7 @@ class NVectorTest {
     assertEquals(a0 ++ b0 ++ c0 ++ d0 ++ e0 ++ f0, a ++ b ++ c ++ d ++ e ++ f)
   }
 
-
-
-
-  val WIDTH = 32
+  import VectorInline.WIDTH
   val allSizes = Seq(0, 1, WIDTH, WIDTH+1, WIDTH*WIDTH, WIDTH*WIDTH+1, WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH+1,
     WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH+1, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1,
     WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH, WIDTH*WIDTH*WIDTH*WIDTH*WIDTH*WIDTH+1, Int.MaxValue)
@@ -317,7 +314,7 @@ class NVectorTest {
 
   @Test
   def testAligned: Unit = for(size <- smallSizes) {
-    val v = NVector.range(0, size)
+    val v = Vector.range(0, size)
     //println(v.toDebugString)
     validateDebug(v)
     assertEquals(size, v.length)
@@ -326,7 +323,7 @@ class NVectorTest {
 
   @Test
   def testNonAligned: Unit = for(size <- smallSizes.filter(n => n > 0 && n < WIDTH*WIDTH*WIDTH*WIDTH)) {
-    val v0 = NVector.range(1, size)
+    val v0 = Vector.range(1, size)
     val v = 0 +: v0
     //println(v0.toDebugString)
     //println(v.toDebugString)
@@ -338,7 +335,7 @@ class NVectorTest {
 
   @Test
   def testUpdate: Unit = for(size <- smallSizes) {
-    var v = NVector.range(0, size)
+    var v = Vector.range(0, size)
     var i = 0
     while(i < size) {
       v = v.updated(i, i-13)
@@ -350,7 +347,7 @@ class NVectorTest {
   @Test
   def testSlice: Unit = for(size <- smallSizes) {
     val step = size/16 max 1
-    val v = NVector.range(0, size)
+    val v = Vector.range(0, size)
     for {
       from <- 0 until size by step
       to <- from until size by step
@@ -364,7 +361,7 @@ class NVectorTest {
   @Test
   def testSlice2: Unit = for(size <- Seq(10, 100, 1000, 10000)) {
     val o = new AnyRef
-    var coll = NVector.fill(size)(o)
+    var coll = Vector.fill(size)(o)
     val inc = size / 10
     if(inc > 0) {
       var i = 0
@@ -372,7 +369,7 @@ class NVectorTest {
         var j = i + inc
         while(j < size) {
           //println(s"--- $i, $j")
-          //println(NVectorUtils.toDebugString(coll))
+          //println(VectorUtils.toDebugString(coll))
           coll.slice(i, j)
           j += inc
         }
@@ -384,7 +381,7 @@ class NVectorTest {
   @Test
   def testTail: Unit = for(size <- verySmallSizes) {
     var i = 0
-    var v = NVector.range(0, size)
+    var v = Vector.range(0, size)
     //println("testTail: "+size)
     while(!v.isEmpty) {
       v = v.tail
@@ -396,12 +393,12 @@ class NVectorTest {
   @Test
   def testRebuild: Unit = for(size <- smallSizes) {
     for(prependSize <- verySmallSizes) {
-      var v = NVector.range(0, size + prependSize)
+      var v = Vector.range(0, size + prependSize)
       for(i <- prependSize to 0 by -1) {
         v = i +: v
       }
       validateDebug(v)
-      val b = NVector.newBuilder[Int]
+      val b = Vector.newBuilder[Int]
       b.addAll(v)
       val v2 = b.result()
       validateDebug(v2)
@@ -412,25 +409,25 @@ class NVectorTest {
   @Test
   def testAppendAll: Unit = for(size <- smallSizes) {
     for(appendSize <- smallSizes) {
-      val v = NVector.range(0, size)
-      val v2 = NVector.range(size, size + appendSize)
+      val v = Vector.range(0, size)
+      val v2 = Vector.range(size, size + appendSize)
       val v3 = v.appendedAll(v2)
       assertEquals(0 until (size + appendSize), v3)
     }
   }
 }
 
-object NVectorUtils {
-  import NVectorInline._
+object VectorUtils {
+  import VectorInline._
 
-  def validateDebug(v: NVector[_]): Unit = {
+  def validateDebug(v: Vector[_]): Unit = {
     try validate(v) catch {
       case ex: Throwable =>
         throw new RuntimeException("Validation failed: " + ex.getMessage + "\n" + toDebugString(v), ex)
     }
   }
 
-  def validate(v: NVector[_]): Unit = {
+  def validate(v: Vector[_]): Unit = {
     val count = v.vectorSliceCount
     val len = (0 until count).map(v.vectorSlicePrefixLength _)
     val alen = (0 until count).map { i =>
@@ -443,7 +440,7 @@ object NVectorUtils {
     }
   }
 
-  def sliceName(v: NVector[_], i: Int): String = {
+  def sliceName(v: Vector[_], i: Int): String = {
     val count = v.vectorSliceCount
     val level = (count+1)/2
     if(i+1 == level) "data"
@@ -451,24 +448,24 @@ object NVectorUtils {
     else "suffix" + (count-i)
   }
 
-  def toDebugString(v: NVector[_]): String = {
+  def toDebugString(v: Vector[_]): String = {
     val sb = new StringBuilder()
     val level = (v.vectorSliceCount+1)/2
     val len = (0 until v.vectorSliceCount).map(v.vectorSlicePrefixLength _)
-    sb.append(s"NVector$level(lenghts=[${len.mkString(", ")}])\n")
+    sb.append(s"Vector$level(lenghts=[${len.mkString(", ")}])\n")
     for(i <- 0 until v.vectorSliceCount)
       logArray(sb, v.vectorSlice(i), "  ", s"${sliceName(v, i)}: ")
     sb.result()
   }
 
-  def toDebugString(v: NVectorSliceBuilder): String = {
+  def toDebugString(v: VectorSliceBuilder): String = {
     val sb = new StringBuilder()
     sb.append(s"$v\n")
     logArray(sb, v.getSlices, "  ", "slices: ")
     sb.result()
   }
 
-  private def toDebugString(v: NVectorBuilder[_]): String = {
+  private def toDebugString(v: VectorBuilder[_]): String = {
     val sb = new StringBuilder()
     sb.append(s"$v\n")
     val d = v.getData.asInstanceOf[Array[Array[AnyRef]]]
