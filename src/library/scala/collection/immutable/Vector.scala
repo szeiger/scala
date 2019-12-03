@@ -58,7 +58,8 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
     * compute different values for each index, this method guarantees that all
     * elements are identical. This allows sparse allocation in O(log n) time and space.
     */
-  def fillSparse[A](n: Int)(elem: A): Vector[A] = {
+  private[collection] def fillSparse[A](n: Int)(elem: A): Vector[A] = {
+    //TODO Make public; this method is private for now because it is not forward binary compatible
     if(n <= 0) Vector0
     else {
       val b = new VectorBuilder[A]
@@ -109,8 +110,6 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
 
   override def iterableFactory: SeqFactory[Vector] = Vector
 
-  protected[this] def tinyAppendLimit: Int = 4 + vectorSliceCount
-
   override final def length: Int =
     if(this.isInstanceOf[BigVector[_]]) this.asInstanceOf[BigVector[_]].length0
     else prefix1.length
@@ -132,6 +131,7 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
   }
 
   protected[this] def appendedAll0[B >: A](suffix: collection.IterableOnce[B], k: Int): Vector[B] = {
+    val tinyAppendLimit = 4 + vectorSliceCount
     if(k > 0 && k < tinyAppendLimit) {
       var v: Vector[B] = this
       suffix match {
@@ -153,15 +153,6 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
 
   /** Like slice but parameters must be 0 <= lo < hi < length */
   protected[this] def slice0(lo: Int, hi: Int): Vector[A]
-
-  override final def slice(from: Int, until: Int): Vector[A] = {
-    val lo = mmax(from, 0)
-    val hi = mmin(until, length)
-    val newlen = hi - lo
-    if(newlen == length) this
-    else if(newlen <= 0) Vector0
-    else slice0(lo, hi)
-  }
 
   /** Number of slices */
   protected[immutable] def vectorSliceCount: Int
@@ -286,8 +277,22 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
 }
 
 
+/** This class only exists because we cannot override `slice` in `Vector` in a binary-compatible way */
+private sealed abstract class VectorImpl[+A](_prefix1: Arr1) extends Vector[A](_prefix1) {
+
+  override final def slice(from: Int, until: Int): Vector[A] = {
+    val lo = mmax(from, 0)
+    val hi = mmin(until, length)
+    val newlen = hi - lo
+    if(newlen == length) this
+    else if(newlen <= 0) Vector0
+    else slice0(lo, hi)
+  }
+}
+
+
 /** Vector with suffix and length fields; all Vector subclasses except Vector1 extend this */
-private sealed abstract class BigVector[+A](_prefix1: Arr1, private[immutable] val suffix1: Arr1, private[immutable] val length0: Int) extends Vector[A](_prefix1)
+private sealed abstract class BigVector[+A](_prefix1: Arr1, private[immutable] val suffix1: Arr1, private[immutable] val length0: Int) extends VectorImpl[A](_prefix1)
 
 
 /** Empty vector */
@@ -329,7 +334,7 @@ private final object Vector0 extends BigVector[Nothing](empty1, empty1, 0) {
 }
 
 /** Flat ArraySeq-like structure */
-private final class Vector1[+A](_data1: Arr1) extends Vector[A](_data1) {
+private final class Vector1[+A](_data1: Arr1) extends VectorImpl[A](_data1) {
 
   @inline def apply(index: Int): A =
     try prefix1(index).asInstanceOf[A]
@@ -1987,4 +1992,12 @@ private class LongVectorStepper(it: NewVectorIterator[Long])
   extends VectorStepperBase[Long, LongStepper, LongVectorStepper](it) with LongStepper {
   protected[this] def build(it: NewVectorIterator[Long]) = new LongVectorStepper(it)
   def nextStep(): Long = it.next()
+}
+
+
+//TODO: Remove; not used by the new Vector implementation anymore
+@deprecated("This class is not intended for public consumption and will be removed in the future.","2.13.0")
+class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int) extends AbstractIterator[A] {
+  def hasNext: Boolean = ???
+  def next(): A = ???
 }

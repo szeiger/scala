@@ -15,10 +15,6 @@ class IndexedSeqTest extends AllocationTest {
     assertTrue(Vector(1, 2, 3) == Vector(1, 2, 3))
     assertTrue(Vector(1, 2, 3, 4, 5, 6, 7, 8, 9) == Vector(1, 2, 3, 4, 5, 6, 7, 8, 9))
 
-    assertTrue(OldVector.empty == OldVector.empty)
-    assertTrue(OldVector(1, 2, 3) == OldVector(1, 2, 3))
-    assertTrue(OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9) == OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
-
     assertTrue(ArraySeq.empty == ArraySeq.empty)
     assertTrue(ArraySeq(1, 2, 3) == ArraySeq(1, 2, 3))
     assertTrue(ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9) == ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
@@ -30,12 +26,6 @@ class IndexedSeqTest extends AllocationTest {
     assertTrue(Vector(1, 2, 3) != Vector(1, 2))
     assertTrue(Vector(1, 2) != Vector(1, 2, 3))
     assertTrue(Vector(1, 2, 3, 4, 5, 6, 7, 8, 9) != Vector(1, 2, 3, 4, 5, 6, 7, 8, 99))
-
-    assertTrue(OldVector.empty != OldVector(1, 2, 3))
-    assertTrue(OldVector(3, 2, 1) != OldVector(1, 2, 3))
-    assertTrue(OldVector(1, 2, 3) != OldVector(1, 2))
-    assertTrue(OldVector(1, 2) != OldVector(1, 2, 3))
-    assertTrue(OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9) != OldVector(1, 2, 3, 4, 5, 6, 7, 8, 99))
   }
 
   @Test def testNotEqualsSimple2: Unit = {
@@ -70,36 +60,24 @@ class IndexedSeqTest extends AllocationTest {
     nonAllocatingEqual(true, Vector.empty, Vector.empty)
     nonAllocatingEqual(true, ArraySeq.empty, ArraySeq.empty)
     nonAllocatingEqual(true, Vector.empty, ArraySeq.empty)
-
-    nonAllocatingEqual(true, OldVector.empty, OldVector.empty)
-    nonAllocatingEqual(true, OldVector.empty, ArraySeq.empty)
   }
 
   @Test def testEqualsSimpleNonAllocatingSmall: Unit = {
     nonAllocatingEqual(true, Vector(1, 2, 3), Vector(1, 2, 3))
     nonAllocatingEqual(true, ArraySeq(1, 2, 3), ArraySeq(1, 2, 3))
     nonAllocatingEqual(true, Vector(1, 2, 3), ArraySeq(1, 2, 3))
-
-    nonAllocatingEqual(true, OldVector(1, 2, 3), OldVector(1, 2, 3))
-    nonAllocatingEqual(true, OldVector(1, 2, 3), ArraySeq(1, 2, 3))
   }
 
   @Test def testEqualsSimpleNonAllocatingDiffSize: Unit = {
     nonAllocatingEqual(false, Vector(1, 2, 3, 4, 5, 6, 7, 8, 9), Vector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
     nonAllocatingEqual(false, ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
     nonAllocatingEqual(false, Vector(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-
-    nonAllocatingEqual(false, OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9), OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
-    nonAllocatingEqual(false, OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9, 10))
   }
 
   @Test def testEqualsSimpleNonAllocatingDiffInFirstFew: Unit = {
     nonAllocatingEqual(false, Vector(1, 2, 3, 14, 5, 6, 7, 8, 9), Vector(1, 2, 3, 4, 5, 6, 7, 8, 9))
     nonAllocatingEqual(false, ArraySeq(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
     nonAllocatingEqual(false, Vector(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
-
-    nonAllocatingEqual(false, OldVector(1, 2, 3, 14, 5, 6, 7, 8, 9), OldVector(1, 2, 3, 4, 5, 6, 7, 8, 9))
-    nonAllocatingEqual(false, OldVector(1, 2, 3, 14, 5, 6, 7, 8, 9), ArraySeq(1, 2, 3, 4, 5, 6, 7, 8, 9))
   }
 
   @Test def testEqualsArraySeqSpecialised1: Unit = {

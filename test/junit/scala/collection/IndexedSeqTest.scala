@@ -583,16 +583,4 @@ package IndexedTestImpl {
       res.result()
     }
   }
-
-  import scala.collection.immutable.OldVector
-  class OldVectorTest extends ImmutableIndexedSeqTest[OldVector[String], String]  with StringTestData {
-
-    override protected def underTest(size: Int): OldVector[String] = {
-      val res = OldVector.newBuilder[String]
-      for (i <- 0 until size)
-        res += expectedValueAtIndex(i)
-      res.result()
-    }
-  }
-
 }

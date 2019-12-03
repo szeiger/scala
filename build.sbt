@@ -205,6 +205,37 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorBuilder.gotoPos"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorBuilder.stabilize"),
 
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoFreshPosWritable1"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display1_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.remainingVector"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.depth_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display1"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display5_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoPosWritable0"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display4"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display2_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoNextBlockStart"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.preClean"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoFreshPosWritable0"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.copyRange"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.remainingElementCount"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display0"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display3_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display3"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoNextBlockStartWritable"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoPos"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display0_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display4_="),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display5"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.depth"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.stabilize"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.initFrom"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.initFrom"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.gotoNewBlockStart"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.display2"),
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.VectorPointer"),
+    ProblemFilters.exclude[MissingTypesProblem]("scala.collection.immutable.VectorIterator"),
+
     // Some other package-private methods have been removed, changed or added
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorBuilder.remainingVector"),
     ProblemFilters.exclude[IncompatibleMethTypeProblem]("scala.collection.immutable.VectorBuilder.initFrom"),
@@ -276,13 +307,8 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.vectorSlicePrefixLength"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.ioob"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.prefix1"),
-
-    //TODO: remove! temporary changes for test build only:
-    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OldVector"),
-    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OldVector$"),
-    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.OldVectorBuilder"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.fillSparse"), // new method, not forward compatible
-    ProblemFilters.exclude[IncompatibleResultTypeProblem]("scala.collection.immutable.Vector.slice"), // needs https://github.com/scala/bug/issues/11804
+    ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.VectorImpl"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.fillSparse"),
   ),
 }
 

@@ -1,3 +1,5 @@
+// This is a copy of the original Scala 2.13 Vector implementation, used by VectorBenchmark2
+
 /*
  * Scala (https://www.scala-lang.org)
  *
@@ -122,7 +124,7 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
     with IndexedSeqOps[A, OldVector, OldVector[A]]
     with StrictOptimizedSeqOps[A, OldVector, OldVector[A]]
     with IterableFactoryDefaults[A, OldVector]
-    with VectorPointer[A]
+    with OldVectorPointer[A]
     with DefaultSerializable { self =>
 
   override def iterableFactory: SeqFactory[OldVector] = OldVector
@@ -136,7 +138,7 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
 
   def length: Int = endIndex - startIndex
 
-  private[collection] def initIterator[B >: A](s: VectorIterator[B]): Unit = {
+  private[collection] def initIterator[B >: A](s: OldVectorIterator[B]): Unit = {
     s.initFrom(this)
     if (dirty) s.stabilize(focus)
     if (s.depth > 1) s.gotoPos(startIndex, startIndex ^ focus)
@@ -146,7 +148,7 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
     if(isEmpty)
       Iterator.empty
     else {
-      val s = new VectorIterator[A](startIndex, endIndex)
+      val s = new OldVectorIterator[A](startIndex, endIndex)
       initIterator(s)
       s
     }
@@ -155,8 +157,8 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
   override def stepper[S <: Stepper[_]](implicit shape: StepperShape[A, S]): S with EfficientSplit = {
     import convert.impl._
     var depth = -1
-    val displaySource: VectorPointer[A] =
-      if (dirty) iterator.asInstanceOf[VectorIterator[A]]
+    val displaySource: OldVectorPointer[A] =
+      if (dirty) iterator.asInstanceOf[OldVectorIterator[A]]
       else this
     val trunk: Array[AnyRef] =
       if      (endIndex <= (1 <<  5)) { depth = 0; displaySource.display0 }
@@ -708,9 +710,9 @@ final class OldVector[+A] private[immutable] (private[collection] val startIndex
 
 //TODO: When making this class private, make it final as well.
 @deprecated("This class is not intended for public consumption and will be made private in the future.","2.13.0")
-class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int)
+class OldVectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int)
   extends AbstractIterator[A]
-    with VectorPointer[A] {
+    with OldVectorPointer[A] {
 
   private[this] final var blockIndex: Int = _startIndex & ~31
   private[this] final var lo: Int = _startIndex & 31
@@ -822,7 +824,7 @@ class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int)
 }
 
 /** A class to build instances of `OldVector`.  This builder is reusable. */
-final class OldVectorBuilder[A]() extends ReusableBuilder[A, OldVector[A]] with VectorPointer[A] {
+final class OldVectorBuilder[A]() extends ReusableBuilder[A, OldVector[A]] with OldVectorPointer[A] {
 
   // possible alternative: start with display0 = null, blockIndex = -32, lo = 32
   // to avoid allocating initial array if the result will be empty anyways
@@ -883,7 +885,7 @@ final class OldVectorBuilder[A]() extends ReusableBuilder[A, OldVector[A]] with 
   }
 }
 
-private[immutable] trait VectorPointer[+T] {
+private[immutable] trait OldVectorPointer[+T] {
     private[immutable] var depth:    Int = _
     private[immutable] var display0: Array[AnyRef] = _
     private[immutable] var display1: Array[Array[AnyRef]] = _
@@ -921,9 +923,9 @@ private[immutable] trait VectorPointer[+T] {
 
 
   // used
-    private[immutable] final def initFrom[U](that: VectorPointer[U]): Unit = initFrom(that, that.depth)
+    private[immutable] final def initFrom[U](that: OldVectorPointer[U]): Unit = initFrom(that, that.depth)
 
-    private[immutable] final def initFrom[U](that: VectorPointer[U], depth: Int) = {
+    private[immutable] final def initFrom[U](that: OldVectorPointer[U], depth: Int) = {
       this.depth = depth
       (depth - 1) match {
         case -1 =>
