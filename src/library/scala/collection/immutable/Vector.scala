@@ -23,6 +23,7 @@ import java.lang.Math.{abs, max => mmax, min => mmin}
 
 import VectorInline._
 import VectorStatics._
+import scala.annotation.unchecked.uncheckedVariance
 import scala.collection.Stepper.EfficientSplit
 
 
@@ -42,9 +43,19 @@ object Vector extends StrictOptimizedSeqFactory[Vector] {
         val knownSize = it.knownSize
         if (knownSize == 0) empty[E]
         else if (knownSize > 0 && knownSize <= WIDTH) {
-          val a1 = new Array[Any](knownSize)
-          it.iterator.copyToArray(a1)
-          new Vector1[E](a1.asInstanceOf[Arr1])
+          val a1: Arr1 = it match {
+            case as: ArraySeq.ofRef[_] if as.elemTag == classOf[AnyRef] =>
+              as.unsafeArray.asInstanceOf[Arr1]
+            case it: Iterable[E] =>
+              val a1 = new Arr1(knownSize)
+              it.copyToArray(a1.asInstanceOf[Array[Any]])
+              a1
+            case _ =>
+              val a1 = new Arr1(knownSize)
+              it.iterator.copyToArray(a1.asInstanceOf[Array[Any]])
+              a1.asInstanceOf[Arr1]
+          }
+          new Vector1[E](a1)
         } else {
           (newBuilder ++= it).result()
         }
@@ -200,80 +211,11 @@ sealed abstract class Vector[+A] private[immutable] (private[immutable] final va
       }
   }
 
-  // Helper methods used by subclasses:
-
-  protected[this] final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
-    var i = 0
-    while(i < a.length) {
-      val v1 = a(i).asInstanceOf[AnyRef]
-      val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
-      if(v1 ne v2)
-        return mapElems1Rest(a, f, i, v2)
-      i += 1
-    }
-    a
-  }
-
-  private[this] final def mapElems1Rest[A, B](a: Arr1, f: A => B, at: Int, v2: AnyRef): Arr1 = {
-    var ac = new Arr1(a.length)
-    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
-    ac(at) = v2
-    var i = at+1
-    while(i < a.length) {
-      ac(i) = f(a(i).asInstanceOf[A]).asInstanceOf[AnyRef]
-      i += 1
-    }
-    ac
-  }
-
-  protected[this] final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
-    if(n == 1)
-      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
-    else {
-      var i = 0
-      while(i < a.length) {
-        val v1 = a(i)
-        val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
-        if(v1 ne v2)
-          return mapElemsRest(n, a, f, i, v2)
-        i += 1
-      }
-      a
-    }
-  }
-
-  private[this] final def mapElemsRest[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B, at: Int, v2: AnyRef): Array[T] = {
-    var ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
-    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
-    ac(at) = v2
-    var i = at+1
-    while(i < a.length) {
-      ac(i) = mapElems(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
-      i += 1
-    }
-    ac.asInstanceOf[Array[T]]
-  }
-
-  protected[this] final def append1IfSpace(suffix1: Arr1, xs: IterableOnce[_]): Arr1 = xs match {
-    case it: Iterable[_] =>
-      if(it.sizeCompare(WIDTH-suffix1.length) <= 0) {
-        it.size match {
-          case 0 => null
-          case 1 => copyAppend(suffix1, it.head.asInstanceOf[AnyRef])
-          case s =>
-            val suffix1b = copyOf(suffix1, suffix1.length + s)
-            it.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
-            suffix1b
-        }
-      } else null
-    case it =>
-      val s = it.knownSize
-      if(s > 0 && s <= WIDTH-suffix1.length) {
-        val suffix1b = copyOf(suffix1, suffix1.length + s)
-        it.iterator.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
-        suffix1b
-      } else null
-  }
+  // The following definitions are needed for binary compatibility with ParVector
+  private[collection] def startIndex: Int = 0
+  private[collection] def endIndex: Int = length
+  private[collection] def initIterator[B >: A](s: VectorIterator[B]): Unit =
+    s.it = iterator.asInstanceOf[NewVectorIterator[B]]
 }
 
 
@@ -1760,6 +1702,79 @@ private object VectorStatics {
       }
     }
   }
+
+  final def mapElems1[A, B](a: Arr1, f: A => B): Arr1 = {
+    var i = 0
+    while(i < a.length) {
+      val v1 = a(i).asInstanceOf[AnyRef]
+      val v2 = f(v1.asInstanceOf[A]).asInstanceOf[AnyRef]
+      if(v1 ne v2)
+        return mapElems1Rest(a, f, i, v2)
+      i += 1
+    }
+    a
+  }
+
+  final def mapElems1Rest[A, B](a: Arr1, f: A => B, at: Int, v2: AnyRef): Arr1 = {
+    var ac = new Arr1(a.length)
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
+    while(i < a.length) {
+      ac(i) = f(a(i).asInstanceOf[A]).asInstanceOf[AnyRef]
+      i += 1
+    }
+    ac
+  }
+
+  final def mapElems[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B): Array[T] = {
+    if(n == 1)
+      mapElems1[A, B](a.asInstanceOf[Arr1], f).asInstanceOf[Array[T]]
+    else {
+      var i = 0
+      while(i < a.length) {
+        val v1 = a(i)
+        val v2 = mapElems(n-1, v1.asInstanceOf[Array[AnyRef]], f)
+        if(v1 ne v2)
+          return mapElemsRest(n, a, f, i, v2)
+        i += 1
+      }
+      a
+    }
+  }
+
+  final def mapElemsRest[A, B, T <: AnyRef](n: Int, a: Array[T], f: A => B, at: Int, v2: AnyRef): Array[T] = {
+    var ac = java.lang.reflect.Array.newInstance(a.getClass.getComponentType, a.length).asInstanceOf[Array[AnyRef]]
+    if(at > 0) System.arraycopy(a, 0, ac, 0, at)
+    ac(at) = v2
+    var i = at+1
+    while(i < a.length) {
+      ac(i) = mapElems(n-1, a(i).asInstanceOf[Array[AnyRef]], f)
+      i += 1
+    }
+    ac.asInstanceOf[Array[T]]
+  }
+
+  final def append1IfSpace(suffix1: Arr1, xs: IterableOnce[_]): Arr1 = xs match {
+    case it: Iterable[_] =>
+      if(it.sizeCompare(WIDTH-suffix1.length) <= 0) {
+        it.size match {
+          case 0 => null
+          case 1 => copyAppend(suffix1, it.head.asInstanceOf[AnyRef])
+          case s =>
+            val suffix1b = copyOf(suffix1, suffix1.length + s)
+            it.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
+            suffix1b
+        }
+      } else null
+    case it =>
+      val s = it.knownSize
+      if(s > 0 && s <= WIDTH-suffix1.length) {
+        val suffix1b = copyOf(suffix1, suffix1.length + s)
+        it.iterator.copyToArray(suffix1b.asInstanceOf[Array[Any]], suffix1.length)
+        suffix1b
+      } else null
+  }
 }
 
 
@@ -1941,6 +1956,9 @@ private final class NewVectorIterator[A](v: Vector[A], private[this] var totalLe
     total
   }
 
+  override def toVector: Vector[A] =
+    v.slice(i1-len1+totalLength, totalLength)
+
   protected[immutable] def split(at: Int): NewVectorIterator[A] = {
     val it2 = clone().asInstanceOf[NewVectorIterator[A]]
     it2.take(at)
@@ -1995,9 +2013,11 @@ private class LongVectorStepper(it: NewVectorIterator[Long])
 }
 
 
-//TODO: Remove; not used by the new Vector implementation anymore
-@deprecated("This class is not intended for public consumption and will be removed in the future.","2.13.0")
-class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int) extends AbstractIterator[A] {
-  def hasNext: Boolean = ???
-  def next(): A = ???
+// The following definitions are needed for binary compatibility with ParVector
+private[collection] class VectorIterator[+A](_startIndex: Int, private[this] var endIndex: Int) extends AbstractIterator[A] {
+  private[immutable] var it: NewVectorIterator[A @uncheckedVariance] = _
+  def hasNext: Boolean = it.hasNext
+  def next(): A = it.next()
+  private[collection] def remainingElementCount: Int = it.size
+  private[collection] def remainingVector: Vector[A] = it.toVector
 }

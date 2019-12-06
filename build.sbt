@@ -243,13 +243,11 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.dirty"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.dirty_="),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.initIterator"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.startIndex"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.updateAt"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.initFrom"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.collection.immutable.Vector.vectorSlice"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.collection.immutable.Vector.vectorSliceCount"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.collection.immutable.Vector.vectorSlicePrefixLength"),
-    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.endIndex"),
     ProblemFilters.exclude[ReversedMissingMethodProblem]("scala.collection.immutable.Vector.slice0"),
     ProblemFilters.exclude[IncompatibleResultTypeProblem]("scala.collection.immutable.VectorIterator.remainingVector"),
 
@@ -309,6 +307,8 @@ val mimaFilterSettings = Seq {
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.prefix1"),
     ProblemFilters.exclude[MissingClassProblem]("scala.collection.immutable.VectorImpl"),
     ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.Vector.fillSparse"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.it"),
+    ProblemFilters.exclude[DirectMissingMethodProblem]("scala.collection.immutable.VectorIterator.it_=")
   ),
 }
 
