@@ -12,7 +12,7 @@
 
 package scala.tools.nsc.transform.async
 
-import user.{AsyncBase, FutureSystem}
+import user.FutureSystem
 import scala.reflect.internal.Flags
 
 // TODO: check there's no await outside of an async block
@@ -21,7 +21,6 @@ abstract class AsyncEarlyExpansion extends AsyncContext {
   import u._
 
   // NOTE: this part runs during typer
-  lazy val futureSystem: FutureSystem = asyncBase.futureSystem
   lazy val futureSystemOps: futureSystem.Ops[u.type] = futureSystem.mkOps(u, false)
 
   /** Perform async macro expansion during typers to a block that creates the state machine class,
@@ -111,7 +110,7 @@ abstract class AsyncEarlyExpansion extends AsyncContext {
 }
 
 // This was originally a macro -- TODO: complete integration with compiler universe (use global instead of scala.reflect.internal stuff)
-abstract class AsyncTransform(val asyncBase: AsyncBase) extends AnfTransform with AsyncAnalysis with Lifter with LiveVariables {
+abstract class AsyncTransform(val futureSystem: FutureSystem) extends AnfTransform with AsyncAnalysis with Lifter with LiveVariables {
   import u._
   import typingTransformers.{TypingTransformApi, typingTransform}
 

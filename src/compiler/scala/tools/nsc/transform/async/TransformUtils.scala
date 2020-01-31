@@ -15,12 +15,13 @@ package scala.tools.nsc.transform.async
 import scala.collection.mutable
 import scala.collection.mutable.ListBuffer
 import scala.reflect.internal.{Flags, SymbolTable}
-import user.AsyncBase
 import scala.tools.nsc.{Global, NoPhase}
 import scala.language.existentials
 
+import user.FutureSystem
+
 private[async] trait AsyncContext {
-  val asyncBase: AsyncBase
+  val futureSystem: FutureSystem
   val u: Global
 }
 
@@ -201,7 +202,7 @@ private[async] trait TransformUtils extends PhasedTransform {
     def fresh(name: String): String = currentFreshNameCreator.newName(name) // TODO ok? was c.freshName
   }
 
-  def emitTryCatch: Boolean = asyncBase.futureSystem.emitTryCatch
+  def emitTryCatch: Boolean = futureSystem.emitTryCatch
 
   def maybeTry(block: Tree, catches: List[CaseDef], finalizer: Tree) =
     if (emitTryCatch) Try(block, catches, finalizer) else block

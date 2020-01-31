@@ -26,33 +26,21 @@ final class async extends annotation.StaticAnnotation
 @annotation.meta.getter
 final class autoawait extends annotation.StaticAnnotation
 
-object AsyncId extends AsyncBase {
-  lazy val futureSystem = IdentityFutureSystem
-  type FS = IdentityFutureSystem.type
-
-//  def async[T](body: => T) = macro asyncIdImpl[T]
-//
-//  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
-}
-
-object AsyncTestLV extends AsyncBase {
-  lazy val futureSystem = IdentityFutureSystem
-  type FS = IdentityFutureSystem.type
-
-//  def async[T](body: T) = macro asyncIdImpl[T]
-//
-//  def asyncIdImpl[T: c.WeakTypeTag](c: Context)(body: c.Expr[T]): c.Expr[futureSystem.Fut[T]] = asyncImpl[T](c)(body)(c.literalUnit)
+object AsyncTestLVFutureSystem extends IdentityFutureSystemBase {
 
   var log: List[(String, Any)] = Nil
-  def assertNulledOut(a: Any): Unit = assert(log.exists(_._2 == a), AsyncTestLV.log)
-  def assertNotNulledOut(a: Any): Unit = assert(!log.exists(_._2 == a), AsyncTestLV.log)
+  def assertNulledOut(a: Any): Unit = assert(log.exists(_._2 == a), log)
+  def assertNotNulledOut(a: Any): Unit = assert(!log.exists(_._2 == a), log)
   def clear(): Unit = log = Nil
 
   def apply(name: String, v: Any): Unit =
     log ::= (name -> v)
 
-  protected[async] override def nullOut(u: api.Universe)(name: u.Expr[String], v: u.Expr[Any]): u.Expr[Unit] =
-    u.reify { AsyncTestLV(name.splice, v.splice) }
+  override def mkOps(u: SymbolTable, isPastErasure: Boolean = false): Ops[u.type] = new LVOps[u.type](u, isPastErasure)
+  class LVOps[Universe <: SymbolTable](u0: Universe, isPastErasure: Boolean) extends IdentityOps[Universe](u0, isPastErasure) {
+    override def nullOut(name: u.Expr[String], v: u.Expr[Any]): u.Expr[Unit] =
+      u.reify { AsyncTestLVFutureSystem(name.splice, v.splice) }
+  }
 }
 
 /**
@@ -62,7 +50,7 @@ object AsyncTestLV extends AsyncBase {
 class Box[A] {
   var a: A = _
 }
-object IdentityFutureSystem extends FutureSystem {
+class IdentityFutureSystemBase extends FutureSystem {
   type Prom[A] = Box[A]
 
   type Fut[A] = A
@@ -132,3 +120,5 @@ object IdentityFutureSystem extends FutureSystem {
     }
   }
 }
+
+object IdentityFutureSystem extends IdentityFutureSystemBase

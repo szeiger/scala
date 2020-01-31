@@ -91,15 +91,13 @@ trait FutureSystem {
 
     /** A hook for custom macros to selectively generate and process a Graphviz visualization of the transformed state machine */
     def dot(enclosingOwner: Symbol, macroApplication: Tree): Option[(String => Unit)] = None
+
+    def nullOut(name: Expr[String], v: Expr[Any]): Expr[Unit] = reify { () }
   }
 
   def mkOps(u: SymbolTable, isPastErasure: Boolean = false): Ops[u.type]
 
-  @deprecated("No longer honoured by the macro, all generated names now contain $async to avoid accidental clashes with lambda lifted names", "0.9.7")
-  def freshenAllNames: Boolean = false
   def emitTryCatch: Boolean = true
-  @deprecated("No longer honoured by the macro, all generated names now contain $async to avoid accidental clashes with lambda lifted names", "0.9.7")
-  def resultFieldName: String = "result"
 }
 
 // TODO AM: test the erased version by running the remainder of the test suite post-posterasure (i.e., not LateExpansion, which tests AsyncId)

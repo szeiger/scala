@@ -22,11 +22,10 @@ import scala.language.existentials
 trait ExprBuilder extends TransformUtils {
   import u._
 
-  lazy val futureSystem: FutureSystem = asyncBase.futureSystem
   lazy val futureSystemOps: futureSystem.Ops[u.type] = futureSystem.mkOps(u, isPastErasure)
 
   def nullOut(fieldSym: Symbol): Tree =
-    asyncBase.nullOut(u)(Expr[String](Literal(Constant(fieldSym.name.toString))), Expr[Any](Ident(fieldSym))).tree
+    futureSystemOps.nullOut(Expr[String](Literal(Constant(fieldSym.name.toString))), Expr[Any](Ident(fieldSym))).tree
 
   def Expr[T: WeakTypeTag](tree: Tree): Expr[T] = u.Expr[T](rootMirror, FixedMirrorTreeCreator(rootMirror, tree))
   def WeakTypeTag[T](tpe: Type): WeakTypeTag[T] = u.WeakTypeTag[T](rootMirror, FixedMirrorTypeCreator(rootMirror, tpe))

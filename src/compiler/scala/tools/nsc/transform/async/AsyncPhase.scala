@@ -32,7 +32,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 
   object macroExpansion extends AsyncEarlyExpansion {
     val u: global.type = global
-    val asyncBase = user.ScalaConcurrentAsync
+    val futureSystem = user.ScalaConcurrentFutureSystem
     import treeInfo.Applied
 
     def fastTrackEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: u.type } => Tree]) =
@@ -54,7 +54,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
   //       replace the ExecutionContext implicit arg with an AsyncContext implicit that also specifies the type of the Future/Awaitable/Node/...?
   class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
-    abstract class AsyncTransformBase(asyncBase: user.AsyncBase) extends AsyncTransform(asyncBase) {
+    abstract class AsyncTransformBase(futureSystem: user.FutureSystem) extends AsyncTransform(futureSystem) {
       val u: global.type = global
       import u._
 
@@ -69,13 +69,13 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
           def callsiteTyper = localTyper
         }
     }
-    object asyncTransformerId extends AsyncTransformBase(user.AsyncId) {
+    object asyncTransformerId extends AsyncTransformBase(user.IdentityFutureSystem) {
       private val asyncIDModule = rootMirror.getRequiredModule("scala.tools.nsc.transform.async.user.AsyncId")
       val Async_async = definitions.getMember(asyncIDModule, nme.async)
       val Async_await = definitions.getMember(asyncIDModule, nme.await)
     }
 
-    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentAsync) {
+    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentFutureSystem) {
       val Async_async = currentRun.runDefinitions.Async_async
       val Async_await = currentRun.runDefinitions.Async_await
     }
