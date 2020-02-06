@@ -13,9 +13,10 @@
 package scala.tools.nsc.transform.async
 
 import scala.tools.nsc.Mode
+import scala.tools.nsc.transform.async.user.FutureSystem
 import scala.tools.nsc.transform.{Transform, TypingTransformers}
 
-abstract class AsyncPhase extends Transform with TypingTransformers  {
+abstract class AsyncPhase extends Transform with TypingTransformers  { self =>
   private val asyncNames_ = new AsyncNames[global.type](global)
   import global._
 
@@ -28,20 +29,29 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
 //    }).Async_async.exists
 //  }
 
+  val futureSystemsCache = perRunCaches.newMap[String, FutureSystem]
+  val earlyExpansionCache = perRunCaches.newMap[String, AsyncEarlyExpansion { val u: global.type }]
 
 
-  object macroExpansion extends AsyncEarlyExpansion {
-    val u: global.type = global
-    val futureSystem = user.ScalaConcurrentFutureSystem
+  object macroExpansion {
     import treeInfo.Applied
 
-    def fastTrackAnnotationEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: u.type } => Tree]) =
+    def fastTrackAnnotationEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree]) =
       (currentRun.runDefinitions.Async_asyncMethod, {
         // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
         case app@Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
-          c => c.global.async.macroExpansion(c.global.analyzer.suppressMacroExpansion(app.tree), execContext, resultTp.tpe, c.internal.enclosingOwner)
+          c => {
+            val fsname = app.tree.symbol.getAnnotation(c.global.currentRun.runDefinitions.Async_asyncMethod).flatMap(_.stringArg(0)).get
+            val exp = c.global.async.earlyExpansionCache.getOrElseUpdate(fsname, new AsyncEarlyExpansion {
+              val u: c.universe.type = c.universe
+              val futureSystem = futureSystemsCache.getOrElseUpdate(fsname, {
+                val clazz = Thread.currentThread().getContextClassLoader.loadClass(fsname+"$") // TODO: Is this the right way to load a class?
+                clazz.getField("MODULE$").get(clazz).asInstanceOf[FutureSystem]
+              })
+            })
+            exp(c.global.analyzer.suppressMacroExpansion(app.tree), execContext, resultTp.tpe, c.internal.enclosingOwner)
+          }
       })
-
   }
 
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
@@ -54,7 +64,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
   //       replace the ExecutionContext implicit arg with an AsyncContext implicit that also specifies the type of the Future/Awaitable/Node/...?
   class AsyncTransformer(unit: CompilationUnit) extends TypingTransformer(unit) {
 
-    abstract class AsyncTransformBase(futureSystem: user.FutureSystem) extends AsyncTransform(futureSystem) {
+    class AsyncTransformBase(futureSystem: user.FutureSystem) extends AsyncTransform(futureSystem) {
       val u: global.type = global
       import u._
 
@@ -74,8 +84,6 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
       val Async_async = definitions.getMember(asyncIDModule, nme.async)
       val Async_await = definitions.getMember(asyncIDModule, nme.await)
     }
-
-    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentFutureSystem)
 
     // TODO AM: does this rely on `futureSystem.Fut[T] = T` (as is the case for the identity future system)
     def transformAutoAwait(awaitable: Tree) =
@@ -101,7 +109,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
         //    ...
         // }
         case Block((cd@ClassDef(mods, tpnme.stateMachine, _, impl@Template(parents, self, stats))) :: (vd@ValDef(_, nme.stateMachine, tpt, _)) :: rest, expr) if tpt.tpe.typeSymbol == cd.symbol =>
-          import asyncTransformerConcurrent._
+          val asyncTransformer = new AsyncTransformBase(cd.getAndRemoveAttachment[FutureSystem].get)
+          import asyncTransformer._
 
           stats.collectFirst {
             case dd@DefDef(mods, name@nme.apply, tparams, vparamss@List(tr :: Nil), tpt, Block( Apply(asyncMacro, List(asyncBody, execContext)) :: Nil, Literal(Constant(())))) =>

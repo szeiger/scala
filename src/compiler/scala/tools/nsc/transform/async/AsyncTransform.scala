@@ -97,6 +97,7 @@ abstract class AsyncEarlyExpansion extends AsyncContext {
       atPos(asyncBody.pos)(ClassDef(NoMods, tpnme.stateMachine, Nil,
                                      gen.mkTemplate(parents, noSelfType, NoMods, List(Nil),
                                                      List(stateVar, resultVal, execContextVal, apply0Def, applyFSM))))
+        .updateAttachment[FutureSystem](futureSystem)
     }
 
     val newStateMachine = ValDef(NoMods, nme.stateMachine, TypeTree(), Apply(Select(New(Ident(tpnme.stateMachine)), nme.CONSTRUCTOR), Nil))
