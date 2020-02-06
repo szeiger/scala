@@ -13,10 +13,20 @@
 package scala.tools.nsc.transform.async
 package user
 
+import scala.annotation.compileTimeOnly
 import scala.language.experimental.macros
 import scala.reflect.api
 import scala.reflect.internal.SymbolTable
 import scala.reflect.macros.whitebox.Context
+
+object AsyncId {
+  @scala.async.asyncMethod("scala.tools.nsc.transform.async.user.IdentityFutureSystem")
+  def async[T](body: T): T = macro ???
+
+  @compileTimeOnly("`await` must be enclosed in an `async` block")
+  @scala.async.awaitMethod("scala.tools.nsc.transform.async.user.IdentityFutureSystem")
+  def await[T](awaitable: T): T = ???
+}
 
 // Methods with this annotation are translated to having the RHS wrapped in `AsyncId.async { <original RHS> }`
 @annotation.meta.field

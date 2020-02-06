@@ -35,8 +35,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
     val futureSystem = user.ScalaConcurrentFutureSystem
     import treeInfo.Applied
 
-    def fastTrackEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: u.type } => Tree]) =
-      (currentRun.runDefinitions.Async_async, {
+    def fastTrackAnnotationEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: u.type } => Tree]) =
+      (currentRun.runDefinitions.Async_asyncMethod, {
         // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
         case app@Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
           c => c.global.async.macroExpansion(c.global.analyzer.suppressMacroExpansion(app.tree), execContext, resultTp.tpe, c.internal.enclosingOwner)
@@ -75,10 +75,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers  {
       val Async_await = definitions.getMember(asyncIDModule, nme.await)
     }
 
-    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentFutureSystem) {
-      val Async_async = currentRun.runDefinitions.Async_async
-      val Async_await = currentRun.runDefinitions.Async_await
-    }
+    object asyncTransformerConcurrent extends AsyncTransformBase(user.ScalaConcurrentFutureSystem)
 
     // TODO AM: does this rely on `futureSystem.Fut[T] = T` (as is the case for the identity future system)
     def transformAutoAwait(awaitable: Tree) =

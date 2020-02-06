@@ -45,11 +45,12 @@ import scala.annotation.compileTimeOnly
  *  }
  * }}}
  */
-object async {
+package object async {
   /**
    * Run the block of code `body` asynchronously. `body` may contain calls to `await` when the results of
    * a `Future` are needed; this is translated into non-blocking code.
    */
+  @asyncMethod("scala.tools.nsc.transform.async.user.ScalaConcurrentFutureSystem")
   def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
 
   /**
@@ -59,5 +60,12 @@ object async {
    * in the `onComplete` handler of `awaitable`, and will *not* block a thread.
    */
   @compileTimeOnly("`await` must be enclosed in an `async` block")
+  @awaitMethod("scala.tools.nsc.transform.async.user.ScalaConcurrentFutureSystem")
   def await[T](awaitable: Future[T]): T = ??? // No implementation here, as calls to this are translated to `onComplete` by the macro.
+}
+
+package async {
+  final class asyncMethod(futureSystem: String) extends scala.annotation.StaticAnnotation {}
+
+  final class awaitMethod(futureSystem: String) extends scala.annotation.StaticAnnotation {}
 }

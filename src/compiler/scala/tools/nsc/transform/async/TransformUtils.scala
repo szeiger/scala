@@ -209,11 +209,21 @@ private[async] trait TransformUtils extends PhasedTransform {
 
   lazy val IllegalStateExceptionClass = rootMirror.staticClass("java.lang.IllegalStateException")
 
-  val Async_async: Symbol
-  val Async_await: Symbol
+  def isAsync(fun: Tree) = {
+    val sym = fun.symbol
+    sym != null && {
+      val so = fun.symbol.getAnnotation(currentRun.runDefinitions.Async_asyncMethod)
+      so.isDefined
+    }
+  }
 
-  def isAsync(fun: Tree) = fun.symbol == Async_async
-  def isAwait(fun: Tree) = fun.symbol == Async_await
+  def isAwait(fun: Tree) = {
+    val sym = fun.symbol
+    sym != null && {
+      val so = fun.symbol.getAnnotation(currentRun.runDefinitions.Async_awaitMethod)
+      so.isDefined
+    }
+  }
 
 
   private lazy val Boolean_ShortCircuits: Set[Symbol] = {
