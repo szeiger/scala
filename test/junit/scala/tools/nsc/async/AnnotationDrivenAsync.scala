@@ -23,7 +23,8 @@ class AnnotationDrivenAsync {
   def testBasicScalaConcurrent(): Unit = {
     val code =
       """
-        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global, scala.async._
+        |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global
+        |import scala.async.Async.{async, await}
         |
         |object Test {
         |  def test: Future[Int] = async { await(f(1)) + await(f(2)) }
@@ -178,6 +179,13 @@ class AnnotationDrivenAsync {
       |
       |""".stripMargin
     assertEquals(true, run(code))
+  }
+
+  // Handy to debug the compiler
+  @Test @Ignore
+  def testManualRunPartestUnderJUnit(): Unit = {
+    val code = new String(Files.readAllBytes(Paths.get("../async/run/concurrent_ArrayIndexOutOfBoundIssue.scala")))
+    assertEquals(("a", "b"), run(code))
   }
 
   // Handy to debug the compiler
