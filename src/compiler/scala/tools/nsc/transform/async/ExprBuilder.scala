@@ -130,7 +130,7 @@ trait ExprBuilder extends TransformUtils {
         If(futureSystemOps.tryyIsFailure(tryReference),
           Block(toList(futureSystemOps.completeProm[T](
             symLookup.selectResult,
-            mkAsInstanceOf(tryReference, transformType(currentTransformState.resultType)))),
+            tryReference)),
             Return(literalUnit)),
           getAndUpdateState
         )

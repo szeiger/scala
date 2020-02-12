@@ -130,8 +130,7 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
 
 class AsyncTransformState[U <: Global with Singleton](val symbolTable: U, val futureSystem: FutureSystem,
                                                       val unit: U#CompilationUnit,
-                                                      val typingTransformer: TypingTransformers#TypingTransformer,
-                                                      val resultType: U#Type) {
+                                                      val typingTransformer: TypingTransformers#TypingTransformer) {
   val ops: futureSystem.Ops[symbolTable.type] = futureSystem.mkOps(symbolTable)
   val localTyper: symbolTable.analyzer.Typer = typingTransformer.localTyper.asInstanceOf[symbolTable.analyzer.Typer]
   val stateAssigner  = new StateAssigner

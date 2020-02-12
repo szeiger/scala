@@ -68,7 +68,7 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
         case tree if tree.hasAttachment[FutureSystemAttachment] =>
           val saved = currentTransformState
           val futureSystem = tree.getAndRemoveAttachment[FutureSystemAttachment].get.system
-          val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this, tree.tpe)
+          val newState = new AsyncTransformState[global.type](global, futureSystem, unit, this)
           currentTransformState = newState
           try tree match {
             case blk@Block((temp@ValDef(_, nme.execContextTemp, _, execContext)) :: (cd@ClassDef(mods, tpnme.stateMachine, _, impl@Template(parents, self, stats))) :: (vd@ValDef(_, nme.stateMachine, tpt, _)) :: rest, expr) if tpt.tpe.typeSymbol == cd.symbol =>
