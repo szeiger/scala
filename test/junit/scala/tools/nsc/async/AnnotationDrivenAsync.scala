@@ -57,7 +57,7 @@ class AnnotationDrivenAsync {
   def testMixedAsync(): Unit = {
     val code = """
       |import scala.tools.nsc.async.{autoawait, customAsync}
-      |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global, scala.async._
+      |import scala.concurrent._, duration.Duration, ExecutionContext.Implicits.global, scala.async.Async._
       |
       |object Test {
       |  @customAsync
@@ -179,13 +179,6 @@ class AnnotationDrivenAsync {
       |
       |""".stripMargin
     assertEquals(true, run(code))
-  }
-
-  // Handy to debug the compiler
-  @Test @Ignore
-  def testManualRunPartestUnderJUnit(): Unit = {
-    val code = new String(Files.readAllBytes(Paths.get("../async/run/concurrent_ArrayIndexOutOfBoundIssue.scala")))
-    assertEquals(("a", "b"), run(code))
   }
 
   // Handy to debug the compiler
