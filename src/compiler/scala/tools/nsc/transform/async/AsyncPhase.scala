@@ -33,16 +33,27 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
 //  }
   final class FutureSystemAttachment(val system: FutureSystem) extends PlainAttachment
 
-  object macroExpansion extends AsyncEarlyExpansion {
-    val global: self.global.type = self.global
-  }
+  val futureSystemsCache = perRunCaches.newMap[String, FutureSystem]
+  val earlyExpansionCache = perRunCaches.newMap[String, AsyncEarlyExpansion { val global: self.global.type }]
 
   import treeInfo.Applied
-  def fastTrackEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree]) =
-    (currentRun.runDefinitions.Async_async, {
+
+  def fastTrackAnnotationEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree]) =
+    (currentRun.runDefinitions.Async_asyncMethod, {
       // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
       case app@Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
-        c => c.global.async.macroExpansion.apply(c.callsiteTyper, asyncBody, execContext, resultTp.tpe, c.internal.enclosingOwner)
+        c => {
+          val fsname = app.tree.symbol.getAnnotation(c.global.currentRun.runDefinitions.Async_asyncMethod).flatMap(_.stringArg(0)).get
+          val exp = c.global.async.earlyExpansionCache.getOrElseUpdate(fsname, new AsyncEarlyExpansion {
+            val global: self.global.type = self.global
+            //val u: c.universe.type = c.universe
+            val futureSystem = futureSystemsCache.getOrElseUpdate(fsname, {
+              val clazz = Thread.currentThread().getContextClassLoader.loadClass(fsname+"$") // TODO: Is this the right way to load a class?
+              clazz.getField("MODULE$").get(clazz).asInstanceOf[FutureSystem]
+            })
+          })
+          exp(c.callsiteTyper, asyncBody, execContext, resultTp.tpe, c.internal.enclosingOwner)
+        }
     })
 
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)

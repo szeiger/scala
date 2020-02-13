@@ -13,7 +13,7 @@
 package scala.tools.nsc.transform.async.user
 
 import scala.language.higherKinds
-import scala.reflect.internal.{NoPhase, SymbolTable}
+import scala.reflect.internal.{AnnotationInfos, NoPhase, SymbolTable}
 import scala.tools.nsc.Global
 
 /**
@@ -36,7 +36,12 @@ trait FutureSystem {
   /** Any data type isomorphic to scala.util.Try. */
   type Tryy[T]
 
-  abstract class Ops[Universe <: SymbolTable](val u: Universe) {
+  lazy val futureSystemName = {
+    val n = getClass.getName
+    if(n.endsWith("$")) n.substring(0, n.length-1) else n
+  }
+
+  abstract class Ops[Universe <: Global](val u: Universe) {
     import u._
 
     final def isPastErasure = {
@@ -44,8 +49,17 @@ trait FutureSystem {
       val erasurePhase = global.currentRun.erasurePhase
       erasurePhase != NoPhase && global.isPast(erasurePhase)
     }
-    def Async_async: Symbol
-    def Async_await: Symbol
+
+    protected[this] def isAsyncOrAwait(fun: Tree, anno: Symbol): Boolean = {
+      val sym = fun.symbol
+      sym != null && {
+        val so = fun.symbol.getAnnotation(anno)
+        so.isDefined && so.get.stringArg(0).getOrElse("") == futureSystemName
+      }
+    }
+
+    def isAsync(fun: Tree) = isAsyncOrAwait(fun, currentRun.runDefinitions.Async_asyncMethod)
+    def isAwait(fun: Tree) = isAsyncOrAwait(fun, currentRun.runDefinitions.Async_awaitMethod)
 
     def literalUnitExpr = if (isPastErasure) gen.mkAttributedRef(definitions.BoxedUnit_UNIT) else Literal(Constant(()))
 
@@ -93,7 +107,7 @@ trait FutureSystem {
 
   }
 
-  def mkOps(u: SymbolTable): Ops[u.type]
+  def mkOps(u: Global): Ops[u.type]
 
   @deprecated("No longer honoured by the macro, all generated names now contain $async to avoid accidental clashes with lambda lifted names", "0.9.7")
   def freshenAllNames: Boolean = false
@@ -111,13 +125,11 @@ object ScalaConcurrentFutureSystem extends FutureSystem {
   type ExecContext = ExecutionContext
   type Tryy[A] = scala.util.Try[A]
 
-  def mkOps(u: SymbolTable): Ops[u.type] = new ScalaConcurrentOps[u.type](u)
-  class ScalaConcurrentOps[Universe <: SymbolTable](u0: Universe) extends Ops[Universe](u0) {
+  def mkOps(u: Global): Ops[u.type] = new ScalaConcurrentOps[u.type](u)
+  class ScalaConcurrentOps[Universe <: Global](u0: Universe) extends Ops[Universe](u0) {
     import u._
 
     private val global = u.asInstanceOf[Global]
-    lazy val Async_async: Symbol = global.currentRun.runDefinitions.Async_async.asInstanceOf[Symbol]
-    lazy val Async_await: Symbol = global.currentRun.runDefinitions.Async_await.asInstanceOf[Symbol]
     lazy val Future_class: Symbol = rootMirror.requiredClass[scala.concurrent.Future[_]]
     lazy val Option_class: Symbol = rootMirror.requiredClass[scala.Option[_]]
     lazy val Promise_class: Symbol = rootMirror.requiredClass[scala.concurrent.Promise[_]]

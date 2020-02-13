@@ -85,7 +85,7 @@ private[async] trait AnfTransform extends TransformUtils {
           stats :+ expr :+ typedAt(expr.pos, Throw(Apply(Select(New(gen.mkAttributedRef(IllegalStateExceptionClass)), nme.CONSTRUCTOR), Nil)))
 
         expr match {
-          case Apply(fun, args) if isAwait(fun) =>
+          case Apply(fun, args) if currentTransformState.ops.isAwait(fun) =>
             val awaitResType = transformType(expr.tpe)
             val valDef = defineVal(name.await(), expr, tree.pos)(awaitResType)
             val ref = gen.mkAttributedStableRef(valDef.symbol).setType(awaitResType)

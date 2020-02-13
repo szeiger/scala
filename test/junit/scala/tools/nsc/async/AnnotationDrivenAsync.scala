@@ -334,7 +334,7 @@ object CustomFutureFutureSystem extends FutureSystem {
   override type Fut[A] = CustomPromise[A]
   override type ExecContext = Unit
   override type Tryy[A] = Either[Throwable, A]
-  override def mkOps(u: SymbolTable): Ops[u.type] = new Ops[u.type](u) {
+  override def mkOps(u: Global): Ops[u.type] = new Ops[u.type](u) {
     import u._
 
     private val global = u.asInstanceOf[Global]
@@ -352,6 +352,9 @@ object CustomFutureFutureSystem extends FutureSystem {
 
     lazy val Async_async: Symbol = NoSymbol.newTermSymbol(nme.EMPTY)
     lazy val Async_await: Symbol = symbolOf[CustomFuture.type].info.member(TermName("_await"))
+
+    override def isAsync(fun: Tree) = fun.symbol == Async_async
+    override def isAwait(fun: Tree) = fun.symbol == Async_await
 
     def tryType(tp: Type): Type = appliedType(Either_class, tp)
     def tryTypeToResult(tp: Type): Type = tp.baseType(Either_class).typeArgs.headOption.getOrElse(NoType)

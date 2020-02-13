@@ -1604,9 +1604,8 @@ trait Definitions extends api.StandardDefinitions {
 
       lazy val Scala_Java8_CompatPackage = rootMirror.getPackageIfDefined("scala.runtime.java8")
 
-      lazy val AsyncModule = getModuleIfDefined("scala.async.Async")
-      lazy val Async_async = AsyncModule.map(async => getDeclIfDefined(async, nme.async))
-      lazy val Async_await = AsyncModule.map(async => getDeclIfDefined(async, nme.await))
+      lazy val Async_asyncMethod = getClassIfDefined("scala.async.asyncMethod")
+      lazy val Async_awaitMethod = getClassIfDefined("scala.async.awaitMethod")
     }
   }
 }

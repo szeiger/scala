@@ -291,7 +291,7 @@ trait ExprBuilder extends TransformUtils {
     // populate asyncStates
     def add(stat: Tree, afterState: Option[Int] = None): Unit = stat match {
       // the val name = await(..) pattern
-      case vd @ ValDef(mods, name, tpt, UnwrapBoxedUnit(Apply(fun, arg :: Nil))) if isAwait(fun) =>
+      case vd @ ValDef(mods, name, tpt, UnwrapBoxedUnit(Apply(fun, arg :: Nil))) if currentTransformState.ops.isAwait(fun) =>
         val onCompleteState = nextState()
         val afterAwaitState = afterState.getOrElse(nextState())
         val awaitable = Awaitable(arg, stat.symbol, tpt.tpe, vd)

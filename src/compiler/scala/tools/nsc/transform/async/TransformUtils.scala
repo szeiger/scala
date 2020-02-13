@@ -179,9 +179,6 @@ private[async] trait TransformUtils extends PhasedTransform {
 
   lazy val IllegalStateExceptionClass = rootMirror.staticClass("java.lang.IllegalStateException")
 
-  def isAsync(fun: Tree) = fun.symbol == currentTransformState.ops.Async_async
-  def isAwait(fun: Tree) = fun.symbol == currentTransformState.ops.Async_await
-
   private lazy val Boolean_ShortCircuits: Set[Symbol] = {
     import definitions.BooleanClass
     def BooleanTermMember(name: String) = BooleanClass.typeSignature.member(TermName(name).encodedName)
@@ -302,7 +299,7 @@ private[async] trait TransformUtils extends PhasedTransform {
 
     override def traverse(tree: Tree): Unit = {
       tree match {
-        case _ if isAsync(tree) =>
+        case _ if currentTransformState.ops.isAsync(tree) =>
           // Under -Ymacro-expand:discard, used in the IDE, nested async blocks will be visible to the outer blocks
         case cd: ClassDef          => nestedClass(cd)
         case md: ModuleDef         => nestedModule(md)
@@ -367,7 +364,7 @@ private[async] trait TransformUtils extends PhasedTransform {
     private def treeCannotContainAwait(t: Tree) = t match {
       case _: CannotHaveAttrs => true
       case _: Ident | _: TypeTree | _: Literal => true
-      case _ => isAsync(t)
+      case _ => currentTransformState.ops.isAsync(t)
     }
     private def attachContainsAwait(t: Tree): Unit = if (shouldAttach(t)) {
       t.updateAttachment(ContainsAwait)
@@ -382,10 +379,10 @@ private[async] trait TransformUtils extends PhasedTransform {
     override def traverse(tree: Tree): Unit = {
       stack ::= tree
       try {
-        if (isAsync(tree)) {
+        if (currentTransformState.ops.isAsync(tree)) {
           ;
         } else {
-          if (isAwait(tree))
+          if (currentTransformState.ops.isAwait(tree))
             stack.foreach(attachContainsAwait)
           else
             attachNoAwait(tree)

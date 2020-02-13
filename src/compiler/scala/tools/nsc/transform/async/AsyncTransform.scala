@@ -24,7 +24,7 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
   import global.async.FutureSystemAttachment
 
   // NOTE: this part runs during typer
-  lazy val futureSystem: FutureSystem = ScalaConcurrentFutureSystem
+  val futureSystem: FutureSystem
   lazy val futureSystemOps: futureSystem.Ops[global.type] = futureSystem.mkOps(global)
 
   private lazy val Promise_class = rootMirror.requiredClass[scala.concurrent.Promise[_]]

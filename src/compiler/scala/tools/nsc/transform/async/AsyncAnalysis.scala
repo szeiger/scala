@@ -69,7 +69,7 @@ trait AsyncAnalysis extends TransformUtils  {
           reportUnsupportedAwait(tree, "lazy val initializer")
         case ValDef(mods, _, _, _) if mods.hasFlag(Flags.LAZY) && containsAwait(tree) =>
           reportUnsupportedAwait(tree, "lazy val initializer")
-        case CaseDef(_, guard, _) if guard exists isAwait     =>
+        case CaseDef(_, guard, _) if guard exists currentTransformState.ops.isAwait     =>
           // TODO lift this restriction
           reportUnsupportedAwait(tree, "pattern guard")
         case _                                                =>
@@ -84,10 +84,10 @@ trait AsyncAnalysis extends TransformUtils  {
       val badAwaits = ListBuffer[Tree]()
       object traverser extends Traverser {
         override def traverse(tree: Tree): Unit = {
-          if (!isAsync(tree))
+          if (!currentTransformState.ops.isAsync(tree))
             super.traverse(tree)
           tree match {
-            case rt: RefTree if isAwait(rt) =>
+            case rt: RefTree if currentTransformState.ops.isAwait(rt) =>
               badAwaits += rt
             case _ =>
           }
