@@ -73,11 +73,22 @@ trait FutureSystem {
     def future(a: Tree, execContext: Tree): Tree
     def futureUnit(execContext: Tree): Tree
 
+    /** Return a Prom[A] type for A */
+    def promType(tp: Type): Type
+
+    /** Create a Prom[A] instance for A */
+    def createProm[A](resultType: Type): Expr[Prom[A]]
+
+    def promiseToFuture[A](prom: Expr[Prom[A]]): Expr[Fut[A]]
+
+    /** Create a default execution context value (only used if the "async" method does not take an execution context parameter) */
+    def defaultExecContext: Tree = ???
+
     type Expr[T] = Tree
 
     /** Register an call back to run on completion of the given future -- only called when isPastErasure */
     def onComplete[A, B](future: Expr[Fut[A]], fun: Expr[Tryy[A] => B],
-                         execContext: Expr[ExecContext]): Expr[Unit]
+                         execContext: Expr[ExecContext], aTp: Type): Expr[Unit]
 
     def continueCompletedFutureOnSameThread = false
 
@@ -91,12 +102,12 @@ trait FutureSystem {
 
     /** Complete a promise with a value -- only called when isPastErasure */
     def completeProm[A](prom: Expr[Prom[A]], value: Expr[Tryy[A]]): Expr[Unit]
-    def completeWithSuccess[A](prom: Expr[Prom[A]], value: Expr[A]): Expr[Unit] = completeProm(prom, tryySuccess(value))
+    def completeWithSuccess[A](prom: Expr[Prom[A]], value: Expr[A], aTp: Type): Expr[Unit] = completeProm(prom, tryySuccess(value, aTp))
 
     def tryyIsFailure[A](tryy: Expr[Tryy[A]]): Expr[Boolean]
 
     def tryyGet[A](tryy: Expr[Tryy[A]]): Expr[A]
-    def tryySuccess[A](a: Expr[A]): Expr[Tryy[A]]
+    def tryySuccess[A](a: Expr[A], aTp: Type): Expr[Tryy[A]]
     def tryyFailure[A](a: Expr[Throwable]): Expr[Tryy[A]]
 
     /** A hook for custom macros to transform the tree post-ANF transform */
@@ -155,8 +166,15 @@ object ScalaConcurrentFutureSystem extends FutureSystem {
     def futureUnit(execContext: Tree): Tree =
       mkAttributedSelectApplyIfNeeded(gen.mkAttributedStableRef(Future_class.companionModule), Future_unit)
 
+    def promType(tp: Type): Type = appliedType(Promise_class, tp)
+
+    def createProm[A](resultType: Type): Expr[Prom[A]] =
+      Apply(TypeApply(gen.mkAttributedStableRef(Promise_class.companionModule), TypeTree(resultType) :: Nil), Nil)
+
+    def promiseToFuture[A](prom: Expr[Prom[A]]): Expr[Fut[A]] = Select(prom, nme.future)
+
     def onComplete[A, B](future: Expr[Fut[A]], fun: Expr[scala.util.Try[A] => B],
-                         execContext: Expr[ExecContext]): Expr[Unit] = {
+                         execContext: Expr[ExecContext], aTp: Type): Expr[Unit] = {
       val sel = Select(future, Future_onComplete)
       if (isPastErasure)
         Apply(sel, fun :: execContext :: Nil)
@@ -190,7 +208,7 @@ object ScalaConcurrentFutureSystem extends FutureSystem {
       mkAttributedSelectApplyIfNeeded(tryy, Try_get)
     }
 
-    def tryySuccess[A](a: Expr[A]): Expr[Tryy[A]] = {
+    def tryySuccess[A](a: Expr[A], aTp: Type): Expr[Tryy[A]] = {
       assert(isPastErasure)
       New(Success_class, a)
     }

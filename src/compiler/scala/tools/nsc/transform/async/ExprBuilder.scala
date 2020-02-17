@@ -93,7 +93,7 @@ trait ExprBuilder extends TransformUtils {
       val futureSystemOps = futureSystem.mkOps(global)
       val fun = This(tpnme.EMPTY)
       val callOnComplete = futureSystemOps.onComplete[Any, Unit](awaitable.expr,
-        fun, Ident(nme.execContext))
+        fun, Ident(nme.execContext), definitions.AnyTpe)
       val tryGetOrCallOnComplete: List[Tree] =
         if (futureSystemOps.continueCompletedFutureOnSameThread) {
           val tempName = nme.completed
@@ -512,7 +512,7 @@ trait ExprBuilder extends TransformUtils {
           val lastState = asyncStates.last
           val lastStateBody = lastState.body
           val rhs = futureSystemOps.completeWithSuccess(
-            symLookup.selectResult, lastStateBody)
+            symLookup.selectResult, lastStateBody, definitions.AnyTpe)
           mkHandlerCase(lastState.state, Block(rhs, Return(literalUnit)))
         }
         asyncStates match {

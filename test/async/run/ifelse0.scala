@@ -8,7 +8,7 @@ package scala.async.run.ifelse0 {
   import scala.async.Async.{async, await}
   import org.junit.Test
   import org.junit.Assert._
-  import scala.async.internal.AsyncId
+  import scala.tools.nsc.transform.async.user.AsyncId
 
 
   class TestIfElseClass {

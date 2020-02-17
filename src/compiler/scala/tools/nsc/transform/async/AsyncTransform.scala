@@ -27,9 +27,6 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
   val futureSystem: FutureSystem
   lazy val futureSystemOps: futureSystem.Ops[global.type] = futureSystem.mkOps(global)
 
-  private lazy val Promise_class = rootMirror.requiredClass[scala.concurrent.Promise[_]]
-  private def promType(tp: Type): Type = appliedType(Promise_class, tp)
-
   /** Perform async macro expansion during typers to a block that creates the state machine class,
     * along with supporting definitions, but without the ANF/Async expansion.
     *
@@ -66,9 +63,10 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
         stateMachine$async.result$async.future
       }
     */
-  def apply(callsiteTyper: analyzer.Typer, asyncBody: Tree, execContext: Tree, resultType: Type, originalOwner: Symbol) = {
+  def apply(callsiteTyper: analyzer.Typer, asyncBody: Tree, execContextOpt: Option[Tree], resultType: Type, originalOwner: Symbol) = {
     val tryResult = futureSystemOps.tryType(resultType)
 
+    val execContext = execContextOpt.getOrElse(futureSystemOps.defaultExecContext)
     val execContextTempVal =
       ValDef(NoMods, nme.execContextTemp, TypeTree(execContext.tpe), execContext)
 
@@ -90,11 +88,8 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
       val stateVar =
         ValDef(Modifiers(Flags.MUTABLE | Flags.PRIVATE), nme.state, TypeTree(definitions.IntTpe), Literal(Constant(StateAssigner.Initial)))
 
-      def createProm(resultType: Type): Tree =
-        Apply(TypeApply(gen.mkAttributedStableRef(Promise_class.companionModule), TypeTree(resultType) :: Nil), Nil)
-
       val resultVal =
-        ValDef(NoMods, nme.result, TypeTree(promType(resultType)), createProm(resultType))
+        ValDef(NoMods, nme.result, TypeTree(futureSystemOps.promType(resultType)), futureSystemOps.createProm(resultType))
 
       val execContextVal =
         ValDef(NoMods, nme.execContext, TypeTree(execContext.tpe), Ident(nme.execContextTemp))
@@ -120,11 +115,12 @@ abstract class AsyncEarlyExpansion extends TypingTransformers {
     val castStateMachine = gen.mkCast(Ident(nme.stateMachine),
       definitions.functionType(futureSystemOps.tryType(definitions.UnitTpe) :: Nil, definitions.UnitTpe))
 
-    val stateMachineToFuture = futureSystemOps.onComplete(futureUnit, castStateMachine, execContextSelect)
+    val stateMachineToFuture = futureSystemOps.onComplete(futureUnit, castStateMachine, execContextSelect, definitions.UnitTpe)
 
-    val promToFuture = Select(Select(Ident(nme.stateMachine), nme.result), nme.future)
+    val promToFuture = futureSystemOps.promiseToFuture(Select(Ident(nme.stateMachine), nme.result))
 
-    Block(List(execContextTempVal, stateMachine, newStateMachine, stateMachineToFuture), promToFuture).updateAttachment(new FutureSystemAttachment(futureSystem))
+    val res = Block(List(execContextTempVal, stateMachine, newStateMachine, stateMachineToFuture), promToFuture).updateAttachment(new FutureSystemAttachment(futureSystem))
+    res
   }
 }
 

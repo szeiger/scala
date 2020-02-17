@@ -38,22 +38,28 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
 
   import treeInfo.Applied
 
+  def fastTrackImpl(app: Applied, resultTp: Tree, asyncBody: Tree, execContext: Option[Tree]): scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree = {
+    c => {
+      val fsname = app.tree.symbol.getAnnotation(c.global.currentRun.runDefinitions.Async_asyncMethod).flatMap(_.stringArg(0)).get
+      val exp = c.global.async.earlyExpansionCache.getOrElseUpdate(fsname, new AsyncEarlyExpansion {
+        val global: self.global.type = self.global
+        //val u: c.universe.type = c.universe
+        val futureSystem = futureSystemsCache.getOrElseUpdate(fsname, {
+          val clazz = Thread.currentThread().getContextClassLoader.loadClass(fsname+"$") // TODO: Is this the right way to load a class?
+          clazz.getField("MODULE$").get(clazz).asInstanceOf[FutureSystem]
+        })
+      })
+      exp(c.callsiteTyper, asyncBody, execContext, resultTp.tpe, c.internal.enclosingOwner)
+    }
+  }
+
   def fastTrackAnnotationEntry: (Symbol, PartialFunction[Applied, scala.reflect.macros.contexts.Context { val universe: self.global.type } => Tree]) =
     (currentRun.runDefinitions.Async_asyncMethod, {
       // def async[T](body: T)(implicit execContext: ExecutionContext): Future[T] = macro ???
       case app@Applied(_, resultTp :: Nil, List(asyncBody :: Nil, execContext :: Nil)) =>
-        c => {
-          val fsname = app.tree.symbol.getAnnotation(c.global.currentRun.runDefinitions.Async_asyncMethod).flatMap(_.stringArg(0)).get
-          val exp = c.global.async.earlyExpansionCache.getOrElseUpdate(fsname, new AsyncEarlyExpansion {
-            val global: self.global.type = self.global
-            //val u: c.universe.type = c.universe
-            val futureSystem = futureSystemsCache.getOrElseUpdate(fsname, {
-              val clazz = Thread.currentThread().getContextClassLoader.loadClass(fsname+"$") // TODO: Is this the right way to load a class?
-              clazz.getField("MODULE$").get(clazz).asInstanceOf[FutureSystem]
-            })
-          })
-          exp(c.callsiteTyper, asyncBody, execContext, resultTp.tpe, c.internal.enclosingOwner)
-        }
+        fastTrackImpl(app, resultTp, asyncBody, Some(execContext))
+      case app@Applied(_, resultTp :: Nil, (asyncBody :: Nil) :: Nil) =>
+        fastTrackImpl(app, resultTp, asyncBody, None)
     })
 
   def newTransformer(unit: CompilationUnit): Transformer = new AsyncTransformer(unit)
@@ -98,7 +104,8 @@ abstract class AsyncPhase extends Transform with TypingTransformers with AsyncTr
               newStats += newApply
               newStats ++= liftables
               val newTempl = treeCopy.Template(impl, parents, self, newStats.toList)
-              treeCopy.Block(tree, temp :: localTyper.typedClassDef(treeCopy.ClassDef(cd, mods, tpnme.stateMachine, Nil, newTempl)) :: vd :: rest, expr)
+              val ucd = treeCopy.ClassDef(cd, mods, tpnme.stateMachine, Nil, newTempl)
+              treeCopy.Block(tree, temp :: localTyper.typedClassDef(ucd) :: vd :: rest, expr)
           } finally {
             currentTransformState = saved
           }
